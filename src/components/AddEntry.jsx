@@ -7,13 +7,18 @@ import { pressKey } from '../lib/keypad.js';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'];
 
-export default function AddEntry({ book: startBook, isOwner, onCancel, onSave }) {
-  const [type, setType] = useState('uit');
-  const [book, setBook] = useState(isOwner ? startBook : 'gezin');
-  const [amount, setAmount] = useState('0');
-  const [cat, setCat] = useState(null);
-  const [date, setDate] = useState(todayISO());
-  const [note, setNote] = useState('');
+function centsToText(c) {
+  if (!c) return '0';
+  return (c / 100).toFixed(2).replace('.', ',').replace(/,00$/, '').replace(/(,\d)0$/, '$1');
+}
+
+export default function AddEntry({ book: startBook, isOwner, initial, onCancel, onSave }) {
+  const [type, setType] = useState(initial?.type || 'uit');
+  const [book, setBook] = useState(isOwner ? initial?.book || startBook : 'gezin');
+  const [amount, setAmount] = useState(centsToText(initial?.amount_cents));
+  const [cat, setCat] = useState(initial?.category || null);
+  const [date, setDate] = useState(initial?.date || todayISO());
+  const [note, setNote] = useState(initial?.note || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 

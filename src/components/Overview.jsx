@@ -94,7 +94,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
             <div className="card empty">
               <PiggyIllustration />
               <b>Nog niets deze maand</b>
-              <span className="small muted">Tik op de plus om je eerste uitgave of inkomst toe te voegen.</span>
+              <span className="small muted">Tik op de microfoon en zeg bv. “25 euro tanken”, of tik op de plus.</span>
             </div>
           )}
           <div className="stack stagger" style={{ gap: 10 }} key={book + month}>

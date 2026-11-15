@@ -10,11 +10,12 @@ Een huishoudboekje voor het gezin, als app op je Android-telefoon of tablet. Gez
 - Budget per categorie, met een waarschuwing als je er bijna door bent
 - Samen in hetzelfde boekje: gezinsleden uitnodigen met een code, alles ververst live
 - Exporteren als CSV (opent in Excel, handig voor de boekhouder)
+- **Spraak**: tik op de oranje microfoon en zeg bv. *"25 euro tanken"*, *"gisteren 64,30 bij Delhaize"* of *"houtskool 45 euro op de zaak"*. De app toont eerst wat hij begreep; jij bevestigt. Meerdere in één keer kan ook: *"12 euro bakker en 8 euro apotheek"*. Gratis: de herkenning gebeurt met Chrome op Android en de zinnen worden op het toestel zelf begrepen.
 - Installeerbaar op je startscherm, werkt op telefoon (onderbalk) en tablet (zijbalk)
 
 Zonder Supabase-gegevens start de app in **proefmodus**: alles blijft dan op het toestel zelf.
 
-Komt later: spraakbediening (stap 3), boodschappenlijst, weekmenu, recepten, voorraad en agenda (stap 4).
+Komt later: boodschappenlijst, weekmenu, recepten, voorraad en agenda (stap 4).
 
 ## Eenmalig instellen
 
