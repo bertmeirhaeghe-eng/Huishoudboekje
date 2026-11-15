@@ -1,5 +1,5 @@
 // Eenvoudige service worker: de app zelf werkt offline, gegevens komen altijd live van de server.
-const CACHE = 'boekje-v2';
+const CACHE = 'boekje-v3';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));
   self.skipWaiting();
@@ -13,7 +13,8 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
   // Netwerk eerst, terugvallen op cache als je offline bent.
   e.respondWith(
-    fetch(e.request)
+    // Altijd de nieuwste versie ophalen (niet uit de browsercache), zodat updates meteen zichtbaar zijn.
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));
