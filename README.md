@@ -24,15 +24,11 @@ Komt later: spraakbediening (stap 3), boodschappenlijst, weekmenu, recepten, voo
 3. Ga naar **Authentication** › **URL Configuration** en zet de **Site URL** op het adres van de app:
    `https://bertmeirhaeghe-eng.github.io/Huishoudboekje/`
 
-### 2. De sleutel aan GitHub geven
-1. In Supabase: **Project Settings** › **API Keys**, kopieer de **anon / publishable** sleutel. (Die is bedoeld om publiek te zijn; de beveiliging zit in de regels van de database. Gebruik nooit de *service_role* of *secret* sleutel.)
-2. In GitHub: **Settings** › **Secrets and variables** › **Actions** › **New repository secret**
-   - Naam: `VITE_SUPABASE_ANON_KEY`
-   - Waarde: de sleutel van hierboven
+### 2. De sleutel in de app zetten
+In Supabase: **Project Settings** › **API Keys**, kopieer de **publishable** (of *anon*) sleutel en zet die in `src/lib/config.js` bij `SUPABASE_KEY`. Die sleutel is bedoeld om publiek te zijn; de beveiliging zit in de regels van de database. Gebruik nooit de *secret* of *service_role* sleutel.
 
 ### 3. Online zetten
-1. In GitHub: **Settings** › **Pages** › bij **Source** kies je **GitHub Actions**.
-2. Ga naar **Actions** › **Online zetten (GitHub Pages)** › **Run workflow**. Na een paar minuten staat de app op het adres hierboven. Elke wijziging op `main` wordt daarna automatisch online gezet.
+Elke wijziging op `main` wordt automatisch gebouwd en op de branch `gh-pages` gezet. Staat de app niet online op `https://bertmeirhaeghe-eng.github.io/Huishoudboekje/`, kies dan één keer in GitHub **Settings** › **Pages** bij **Source** voor *Deploy from a branch*, branch `gh-pages`, map `/ (root)`.
 
 ### 4. Op de telefoon zetten
 Open het adres in **Chrome** op Android, tik op de drie puntjes › **App installeren** (of *Toevoegen aan startscherm*). Maak een account, kies **Nieuw boekje**, en nodig je gezin uit via **Meer** › **Iemand uitnodigen**.
