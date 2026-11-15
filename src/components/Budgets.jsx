@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import Icon from './Icon.jsx';
+import CatIcon from './CatIcon.jsx';
 import { MonthSwitcher } from './Chart.jsx';
 import { categoriesFor } from '../lib/categories.js';
 import { money, parseAmount } from '../lib/format.js';
@@ -44,7 +44,7 @@ function BudgetRow({ hid, book, cat, value, used, onChange }) {
   const ratio = value ? used / value : 0;
   return (
     <div className="entry" style={{ alignItems: 'center' }}>
-      <span className="ico"><Icon name={cat.icon} /></span>
+      <CatIcon id={cat.id} />
       <label className="grow" htmlFor={'b-' + cat.id}>
         <span style={{ display: 'block', fontWeight: 600 }}>{cat.name}</span>
         <span className="tiny muted" style={{ color: ratio > 1 ? 'var(--danger)' : undefined }}>

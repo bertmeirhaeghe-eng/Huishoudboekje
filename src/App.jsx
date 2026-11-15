@@ -9,6 +9,9 @@ import AddEntry from './components/AddEntry.jsx';
 import Budgets from './components/Budgets.jsx';
 import Settings from './components/Settings.jsx';
 import Chart from './components/Chart.jsx';
+import Celebrate from './components/Celebrate.jsx';
+import { money } from './lib/format.js';
+import { category } from './lib/categories.js';
 
 const CHART_MONTHS = 6;
 
@@ -43,6 +46,7 @@ function Boekje({ household, onHouseholdChange }) {
   const [entries, setEntries] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState('');
+  const [party, setParty] = useState(null);
 
   const months = useMemo(() => Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1)), [month]);
 
@@ -87,6 +91,7 @@ function Boekje({ household, onHouseholdChange }) {
           if (!entry.date.startsWith(month)) setMonth(entry.date.slice(0, 7));
           await load();
           go('overzicht');
+          setParty(`${entry.type === 'in' ? '+' : '−'} ${money(entry.amount_cents)} ${category(entry.category).name} bewaard`);
         }}
       />
     );
@@ -129,8 +134,9 @@ function Boekje({ household, onHouseholdChange }) {
           <div className="banner" style={{ marginBottom: 14 }}>Proefmodus: gegevens blijven alleen op dit toestel.</div>
         )}
         {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
-        {content}
+        <div className="screen" key={screen}>{content}</div>
       </main>
+      {party && <Celebrate key={party + Date.now()} text={party} onDone={() => setParty(null)} />}
     </div>
   );
 }

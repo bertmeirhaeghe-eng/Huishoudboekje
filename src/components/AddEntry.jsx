@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from './Icon.jsx';
+import CatIcon from './CatIcon.jsx';
 import { categoriesFor } from '../lib/categories.js';
 import { parseAmount, todayISO } from '../lib/format.js';
 import { pressKey } from '../lib/keypad.js';
@@ -45,7 +46,7 @@ export default function AddEntry({ book: startBook, isOwner, onCancel, onSave })
         <span style={{ width: 44 }} />
       </div>
 
-      <div className={'amount-display' + (type === 'in' ? ' in' : '')} aria-live="polite">€ {amount}</div>
+      <div key={amount} className={'amount-display bump' + (type === 'in' ? ' in' : '')} aria-live="polite">€ {amount}</div>
 
       {isOwner && (
         <div className="seg" role="group" aria-label="Boekje">
@@ -54,10 +55,10 @@ export default function AddEntry({ book: startBook, isOwner, onCancel, onSave })
         </div>
       )}
 
-      <div className="cats" role="group" aria-label="Categorie">
+      <div className="cats stagger" key={book + type} role="group" aria-label="Categorie">
         {cats.map((c) => (
           <button key={c.id} className="cat" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>
-            <span className={'ico' + (cat === c.id ? ' on' : '')}><Icon name={c.icon} /></span>
+            <CatIcon id={c.id} selected={cat === c.id} />
             {c.name}
           </button>
         ))}

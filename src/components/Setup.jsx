@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { store } from '../lib/store.js';
+import { HomeIllustration } from './Illustrations.jsx';
 
 export default function Setup({ onDone }) {
   const [mode, setMode] = useState('nieuw');
@@ -24,7 +25,8 @@ export default function Setup({ onDone }) {
 
   return (
     <div className="center-page">
-      <form className="stack" onSubmit={submit}>
+      <form className="stack screen" onSubmit={submit}>
+        <HomeIllustration width={200} />
         <h1>Bijna klaar</h1>
         <div className="seg" role="group" aria-label="Kies">
           <button type="button" aria-pressed={mode === 'nieuw'} onClick={() => setMode('nieuw')}>Nieuw boekje</button>

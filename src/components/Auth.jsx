@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { store } from '../lib/store.js';
+import { HomeIllustration } from './Illustrations.jsx';
 
 export default function Auth({ onDone }) {
   const [mode, setMode] = useState('in');
@@ -29,8 +30,8 @@ export default function Auth({ onDone }) {
 
   return (
     <div className="center-page">
-      <form className="stack" onSubmit={submit}>
-        <img className="logo" src="./icon.svg" alt="" />
+      <form className="stack screen" onSubmit={submit}>
+        <HomeIllustration />
         <h1>{mode === 'in' ? 'Welkom terug' : 'Account maken'}</h1>
         <p className="small muted" style={{ margin: 0 }}>Jullie huishoudboekje, samen op elke telefoon.</p>
         <label className="field">E-mail<input className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>

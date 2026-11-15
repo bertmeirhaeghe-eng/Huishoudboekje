@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 import Icon from './Icon.jsx';
+import CatIcon from './CatIcon.jsx';
+import { CoinStack, PiggyIllustration } from './Illustrations.jsx';
+import { useCountUp } from '../lib/anim.js';
 import { MonthBars, MonthSwitcher } from './Chart.jsx';
 import { category } from '../lib/categories.js';
 import { dayLabel, longToday, money } from '../lib/format.js';
@@ -14,6 +17,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
   const names = Object.fromEntries(household.members.map((m) => [m.user_id, m.display_name]));
 
   const zaak = book === 'zaak';
+  const shown = useCountUp(sum.balance);
   const spentRatio = sum.income > 0 ? Math.min(1, sum.expense / sum.income) : sum.expense > 0 ? 1 : 0;
 
   return (
@@ -45,8 +49,9 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         <div className="stack">
           <section className={'hero' + (zaak ? ' zaak' : '')} aria-label="Saldo deze maand">
             <span className="small bold" style={{ opacity: 0.92 }}>{zaak ? 'Resultaat vennootschap' : 'Nog te besteden'}</span>
-            <span className="big">{money(sum.balance, { round: Math.abs(sum.balance) >= 100000 })}</span>
-            <div className="bar"><span style={{ width: `${Math.round(spentRatio * 100)}%` }} /></div>
+            <CoinStack />
+            <span className="big" aria-label={money(sum.balance)}>{money(shown, { round: Math.abs(sum.balance) >= 100000 })}</span>
+            <div className="bar" key={book + month}><span style={{ width: `${Math.round(spentRatio * 100)}%` }} /></div>
             <div className="spread small">
               <span>In: <b>{money(sum.income)}</b></span>
               <span>Uit: <b>{money(sum.expense)}</b></span>
@@ -67,10 +72,11 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               <button className="tiny bold" onClick={onOpenBudgets} style={{ border: 0, background: 'none', color: zaak ? 'var(--blue)' : 'var(--green)', minHeight: 44 }}>Aanpassen</button>
             </div>
             {rows.length === 0 && <div className="card small muted">Nog geen budgetten. Tik op Aanpassen om er een paar in te stellen.</div>}
+            <div className="stack stagger" style={{ gap: 10 }} key={book + month}>
             {rows.map((r) => (
               <div className="card" key={r.id}>
                 <div className="spread small" style={{ marginBottom: 8 }}>
-                  <span className="bold">{category(r.id).name}</span>
+                  <span className="row" style={{ gap: 10 }}><CatIcon id={r.id} size={18} /><span className="bold">{category(r.id).name}</span></span>
                   <span className="muted">{money(r.used, { round: true })}{r.max ? ` van ${money(r.max, { round: true })}` : ''}</span>
                 </div>
                 <div className={'meter' + (r.ratio > 1 ? ' over' : r.ratio > 0.9 ? ' warn' : '')}>
@@ -78,14 +84,20 @@ export default function Overview({ household, isOwner, book, setBook, month, set
                 </div>
               </div>
             ))}
+            </div>
           </section>
         </div>
 
         <section className="stack" style={{ gap: 10 }}>
           <h2>Boekingen</h2>
           {groups.length === 0 && (
-            <div className="card small muted">Nog niets deze maand. Tik op de groene plus om iets toe te voegen.</div>
+            <div className="card empty">
+              <PiggyIllustration />
+              <b>Nog niets deze maand</b>
+              <span className="small muted">Tik op de plus om je eerste uitgave of inkomst toe te voegen.</span>
+            </div>
           )}
+          <div className="stack stagger" style={{ gap: 10 }} key={book + month}>
           {groups.map((g) => (
             <div key={g.date} className="stack" style={{ gap: 6 }}>
               <span className="tiny bold muted" style={{ paddingLeft: 4 }}>{dayLabel(g.date)}</span>
@@ -94,7 +106,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
                   const c = category(e.category);
                   return (
                     <button key={e.id} className="entry" onClick={() => setOpen(e)}>
-                      <span className="ico"><Icon name={c.icon} /></span>
+                      <CatIcon id={e.category} />
                       <span className="grow">
                         <span style={{ display: 'block', fontWeight: 600 }}>{e.note || c.name}</span>
                         <span className="tiny muted">{c.name}{names[e.created_by] ? ` · ${names[e.created_by]}` : ''}</span>
@@ -106,6 +118,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               </div>
             </div>
           ))}
+          </div>
         </section>
       </div>
 
@@ -129,7 +142,7 @@ function EntrySheet({ entry, who, onClose, onDelete }) {
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Boeking" onClick={(e) => e.stopPropagation()}>
         <div className="spread">
           <div className="row">
-            <span className="ico on"><Icon name={c.icon} /></span>
+            <CatIcon id={entry.category} selected />
             <div>
               <div className="bold">{entry.note || c.name}</div>
               <div className="tiny muted">{c.name} · {entry.book === 'zaak' ? 'Zaak' : 'Gezin'}</div>
