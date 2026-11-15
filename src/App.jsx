@@ -10,6 +10,7 @@ import Budgets from './components/Budgets.jsx';
 import Settings from './components/Settings.jsx';
 import Chart from './components/Chart.jsx';
 import Celebrate from './components/Celebrate.jsx';
+import Voice from './components/Voice.jsx';
 import { money } from './lib/format.js';
 import { category } from './lib/categories.js';
 
@@ -47,6 +48,7 @@ function Boekje({ household, onHouseholdChange }) {
   const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState('');
   const [party, setParty] = useState(null);
+  const [draft, setDraft] = useState(null); // voorinvulling vanuit spraak
 
   const months = useMemo(() => Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1)), [month]);
 
@@ -77,6 +79,20 @@ function Boekje({ household, onHouseholdChange }) {
 
   const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
 
+  async function saveEntries(list) {
+    for (const entry of list) await store.addEntry({ ...entry, household_id: household.id });
+    const last = list[list.length - 1];
+    if (last.book !== book) setBook(last.book);
+    if (!last.date.startsWith(month)) setMonth(last.date.slice(0, 7));
+    await load();
+    setDraft(null);
+    go('overzicht');
+    const text = list.length > 1
+      ? `${list.length} boekingen bewaard`
+      : `${last.type === 'in' ? '+' : '−'} ${money(last.amount_cents)} ${category(last.category).name} bewaard`;
+    setParty({ text, id: Date.now() });
+  }
+
   const common = { household, book, month, setMonth };
   let content;
   if (screen === 'toevoegen') {
@@ -84,15 +100,9 @@ function Boekje({ household, onHouseholdChange }) {
       <AddEntry
         {...common}
         isOwner={isOwner}
-        onCancel={() => go('overzicht')}
-        onSave={async (entry) => {
-          await store.addEntry({ ...entry, household_id: household.id });
-          if (entry.book !== book) setBook(entry.book);
-          if (!entry.date.startsWith(month)) setMonth(entry.date.slice(0, 7));
-          await load();
-          go('overzicht');
-          setParty(`${entry.type === 'in' ? '+' : '−'} ${money(entry.amount_cents)} ${category(entry.category).name} bewaard`);
-        }}
+        initial={draft}
+        onCancel={() => { setDraft(null); go('overzicht'); }}
+        onSave={(entry) => saveEntries([entry])}
       />
     );
   } else if (screen === 'budgetten') {
@@ -123,8 +133,11 @@ function Boekje({ household, onHouseholdChange }) {
       <nav className="nav" aria-label="Hoofdmenu">
         <NavBtn icon="home" label="Overzicht" on={screen === 'overzicht'} onClick={() => go('overzicht')} />
         <NavBtn icon="chart" label="Grafiek" on={screen === 'grafiek'} onClick={() => go('grafiek')} />
-        <button className="fab" aria-label="Uitgave of inkomst toevoegen" aria-current={screen === 'toevoegen' ? 'page' : undefined} onClick={() => go('toevoegen')}>
-          <Icon name="plus" size={30} stroke={2.4} />
+        <button className="fab mic-fab" aria-label="Spreken" onClick={() => setScreen('spraak')}>
+          <Icon name="mic" size={30} stroke={2.2} />
+        </button>
+        <button className={'add-fab' + (screen === 'toevoegen' ? ' hidden-on-phone' : '')} aria-label="Uitgave of inkomst toevoegen" aria-current={screen === 'toevoegen' ? 'page' : undefined} onClick={() => { setDraft(null); go('toevoegen'); }}>
+          <Icon name="plus" size={26} stroke={2.4} />
         </button>
         <NavBtn icon="target" label="Budgetten" on={screen === 'budgetten'} onClick={() => go('budgetten')} />
         <NavBtn icon="gear" label="Meer" on={screen === 'meer'} onClick={() => go('meer')} />
@@ -136,7 +149,15 @@ function Boekje({ household, onHouseholdChange }) {
         {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
         <div className="screen" key={screen}>{content}</div>
       </main>
-      {party && <Celebrate key={party + Date.now()} text={party} onDone={() => setParty(null)} />}
+      {screen === 'spraak' && (
+        <Voice
+          isOwner={isOwner}
+          onCancel={() => setScreen('overzicht')}
+          onSave={saveEntries}
+          onEdit={(item) => { setDraft(item); go('toevoegen'); }}
+        />
+      )}
+      {party && <Celebrate key={party.id} text={party.text} onDone={() => setParty(null)} />}
     </div>
   );
 }
