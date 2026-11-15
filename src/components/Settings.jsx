@@ -4,8 +4,9 @@ import { category } from '../lib/categories.js';
 import { todayISO } from '../lib/format.js';
 import { toCSV } from '../lib/stats.js';
 import { store } from '../lib/store.js';
+import * as gcal from '../lib/gcal.js';
 
-export default function Settings({ household, onChange }) {
+export default function Settings({ household, onChange, onOpenTax }) {
   const [msg, setMsg] = useState('');
   const isOwner = household.role === 'eigenaar';
 
@@ -49,7 +50,17 @@ export default function Settings({ household, onChange }) {
         {msg && <span className="small muted">{msg}</span>}
       </section>
 
+      {isOwner && onOpenTax && (
+        <button className="card tile-wide" onClick={onOpenTax}>
+          <span className="tile-ico blue"><Icon name="scale" size={20} /></span>
+          <span className="grow" style={{ textAlign: 'left' }}><b style={{ display: 'block' }}>Privé of zaak?</b><span className="tiny muted">Vuistregels voor je vennootschap</span></span>
+          <Icon name="next" size={18} />
+        </button>
+      )}
+
       <MyName household={household} onChange={onChange} />
+
+      <GoogleCalendar />
 
       <section className="card stack" style={{ gap: 10 }}>
         <h2>Exporteren</h2>
@@ -82,6 +93,31 @@ function MyName({ household, onChange }) {
         <button className="btn" disabled={!name.trim()} onClick={async () => { await store.updateMyName(household.id, name.trim()); setDone(true); onChange(); }}>Bewaren</button>
       </div>
       {done && <span className="small muted">Bewaard.</span>}
+    </section>
+  );
+}
+
+function GoogleCalendar() {
+  const [, force] = useState(0);
+  const [error, setError] = useState('');
+  const on = gcal.wasConnected();
+  return (
+    <section className="card stack" style={{ gap: 10 }}>
+      <h2>Google Agenda</h2>
+      {!gcal.gcalConfigured() ? (
+        <span className="small muted">Nog niet ingesteld. Afspraken openen voorlopig in Google Agenda om op te slaan.</span>
+      ) : on ? (
+        <>
+          <span className="small muted">Gekoppeld op dit toestel. Afspraken gaan naar: <b>{gcal.calendarName()}</b>.</span>
+          <button className="btn ghost" onClick={() => { gcal.disconnect(); force((n) => n + 1); }}>Ontkoppelen</button>
+        </>
+      ) : (
+        <>
+          <span className="small muted">Elk gezinslid koppelt met een eigen Google-account.</span>
+          <button className="btn ghost" onClick={async () => { setError(''); try { await gcal.connect(); force((n) => n + 1); } catch (e) { setError(e.message); } }}><Icon name="google" /> Koppelen met Google</button>
+        </>
+      )}
+      {error && <div className="error">{error}</div>}
     </section>
   );
 }

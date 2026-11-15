@@ -70,16 +70,41 @@ export function createSupabaseStore(url, anonKey) {
         must(await sb.from('budgets').delete().eq('household_id', hid).eq('book', book).eq('category', category));
       }
     },
+    // Thuis (stap 4): boodschappen, voorraad, recepten, weekmenu.
+    async listRows(table, hid) {
+      check(table);
+      return must(await sb.from(table).select('*').eq('household_id', hid).limit(2000));
+    },
+    async addRows(table, rows) {
+      check(table);
+      return must(await sb.from(table).insert(rows).select());
+    },
+    async updateRow(table, id, patch) {
+      check(table);
+      return must(await sb.from(table).update(patch).eq('id', id).select().single());
+    },
+    async deleteRows(table, ids) {
+      check(table);
+      if (ids.length) must(await sb.from(table).delete().in('id', ids));
+    },
+    async setMenu(hid, date, meal, recipeId = null) {
+      if (meal) must(await sb.from('menu_days').upsert({ household_id: hid, date, meal, recipe_id: recipeId }));
+      else must(await sb.from('menu_days').delete().eq('household_id', hid).eq('date', date));
+    },
+
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
-    subscribe(hid, fn) {
-      const ch = sb
-        .channel('boekje-' + hid)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `household_id=eq.${hid}` }, fn)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'budgets', filter: `household_id=eq.${hid}` }, fn)
-        .subscribe();
+    subscribe(hid, fn, tables = ['entries', 'budgets']) {
+      let ch = sb.channel('boekje-' + tables.join('-') + '-' + hid);
+      for (const table of tables) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `household_id=eq.${hid}` }, fn);
+      ch.subscribe();
       return () => sb.removeChannel(ch);
     },
   };
+}
+
+const HOME_TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
+function check(table) {
+  if (!HOME_TABLES.includes(table)) throw new Error('Onbekende lijst: ' + table);
 }
 
 function translate(msg) {
@@ -89,6 +114,7 @@ function translate(msg) {
   if (/already registered/i.test(m)) return 'Dit e-mailadres heeft al een account. Log gewoon in.';
   if (/Password should be at least/i.test(m)) return 'Kies een wachtwoord van minstens 6 tekens.';
   if (/invite code/i.test(m)) return 'Die uitnodigingscode bestaat niet.';
+  if (/relation .* does not exist|Could not find the table/i.test(m)) return 'De database mist nog de nieuwe tabellen. Voer schema.sql opnieuw uit in Supabase.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Geen verbinding. Probeer het zo meteen opnieuw.';
   return m;
 }

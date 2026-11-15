@@ -3,16 +3,18 @@ import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { category } from '../lib/categories.js';
 import { dayLabel, money } from '../lib/format.js';
-import { parseSpeech } from '../lib/voice.js';
+import { parseCommand } from '../lib/commands.js';
 
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-const EXAMPLES = ['25 euro tanken', 'Gisteren 64,30 bij Delhaize', 'Houtskool 45 euro op de zaak', 'Loon ontvangen 3800 euro', '12 euro bakker en 8 euro apotheek'];
+const EXAMPLES = ['25 euro tanken', 'Gisteren 64,30 bij Delhaize', 'Melk, eieren en brood op de lijst', 'De koffie is op', 'Vrijdag eten we lasagne', 'Zaterdag om 10 uur zwemles'];
+const DAYS = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 
-export default function Voice({ isOwner, onCancel, onSave, onEdit }) {
+export default function Voice({ isOwner, recipes = [], members = [], onCancel, onSave, onEdit, onHome }) {
   const [phase, setPhase] = useState(SR ? 'luisteren' : 'typen'); // luisteren | begrepen | typen | fout
   const [heard, setHeard] = useState('');
   const [items, setItems] = useState([]);
+  const [cmd, setCmd] = useState(null);
   const [error, setError] = useState('');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,9 +27,10 @@ export default function Voice({ isOwner, onCancel, onSave, onEdit }) {
   }
 
   function understand(text) {
-    const r = parseSpeech(text, { allowZaak: isOwner });
+    const c = parseCommand(text, { allowZaak: isOwner, recipes, members });
     setHeard(text);
-    setItems(r);
+    setCmd(c);
+    setItems(c?.kind === 'geld' ? c.items : []);
     setPhase('begrepen');
   }
 
@@ -72,11 +75,16 @@ export default function Voice({ isOwner, onCancel, onSave, onEdit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ok = items.length > 0 && items.every((i) => i.amount_cents > 0);
+  const isMoney = !cmd || cmd.kind === 'geld';
+  const ok = isMoney
+    ? items.length > 0 && items.every((i) => i.amount_cents > 0)
+    : cmd.kind === 'menu' ? Boolean(cmd.meal?.trim()) : cmd.kind === 'agenda' ? Boolean(cmd.title?.trim()) : cmd.items.length > 0;
 
   async function confirm() {
     setBusy(true);
+    setError('');
     try {
+      if (!isMoney) { await onHome(cmd); return; }
       await onSave(items.map(({ type, book, amount_cents, category, date, note }) => ({ type, book, amount_cents, category, date, note })));
     } catch (e) {
       setError(e.message);
@@ -129,17 +137,17 @@ export default function Voice({ isOwner, onCancel, onSave, onEdit }) {
           <span className="small" style={{ color: '#C9D1D9' }}>Je zei:</span>
           <p className="voice-said">“{heard}”</p>
           <div className="stack stagger" style={{ gap: 10 }}>
-            {items.map((it, i) => (
-              <Understood key={i} item={it} onEdit={() => onEdit(it)} />
-            ))}
+            {isMoney
+              ? items.map((it, i) => <Understood key={i} item={it} onEdit={() => onEdit(it)} />)
+              : <HomeCard cmd={cmd} setCmd={setCmd} recipes={recipes} />}
           </div>
           {error && <div className="error">{error}</div>}
           <div className="grow" />
           <button className="btn" disabled={!ok || busy} onClick={confirm}>
-            <Icon name="check" /> {busy ? 'Bewaren…' : items.length > 1 ? `Klopt, bewaar alle ${items.length}` : 'Klopt, bewaren'}
+            <Icon name="check" /> {busy ? 'Bewaren…' : !isMoney ? CONFIRM[cmd.kind] : items.length > 1 ? `Klopt, bewaar alle ${items.length}` : 'Klopt, bewaren'}
           </button>
           <div className="row">
-            <button className="btn dark grow" onClick={() => onEdit(items[0])}>Aanpassen</button>
+            {isMoney && <button className="btn dark grow" onClick={() => onEdit(items[0])}>Aanpassen</button>}
             <button className="btn dark grow" onClick={listen}><Icon name="mic" size={20} /> Opnieuw</button>
           </div>
         </div>
@@ -171,6 +179,58 @@ function Understood({ item, onEdit }) {
       </div>
       {noAmount && <div className="notice">Ik hoorde geen bedrag. Zeg het opnieuw met een bedrag, of tik op Aanpassen.</div>}
       {!noAmount && item.missing.includes('categorie') && <div className="notice">Ik weet niet goed waarvoor. Het staat bij Andere; tik op Aanpassen om te kiezen.</div>}
+    </div>
+  );
+}
+
+const CONFIRM = { lijst: 'Klopt, op de lijst', voorraad: 'Klopt, op de lijst', menu: 'Klopt, op het menu', agenda: 'Klopt, in de agenda' };
+
+const KIND = {
+  lijst: { label: 'Boodschappenlijst', icon: 'list', color: 'var(--green)' },
+  voorraad: { label: 'Voorraad', icon: 'box', color: 'var(--orange)' },
+  menu: { label: 'Weekmenu', icon: 'pot', color: 'var(--orange)' },
+  agenda: { label: 'Agenda', icon: 'calendar', color: 'var(--blue)' },
+};
+
+function HomeCard({ cmd, setCmd, recipes }) {
+  const k = KIND[cmd.kind];
+  const set = (patch) => setCmd({ ...cmd, ...patch });
+  return (
+    <div className="understood">
+      <span className="tiny bold row" style={{ gap: 6, textTransform: 'uppercase', letterSpacing: '0.06em', color: k.color }}><Icon name={k.icon} size={16} /> {k.label}</span>
+      {(cmd.kind === 'lijst' || cmd.kind === 'voorraad') && (
+        <>
+          {cmd.kind === 'voorraad' && <span className="small">{cmd.status === 'bijna' ? 'Bijna op' : 'Op'}, dus ik zet het op de boodschappenlijst:</span>}
+          <div className="chips-wrap">
+            {cmd.items.map((it, i) => (
+              <span key={i} className="pill on">
+                {it.qty ? `${it.qty} ` : ''}{it.name}
+                <button aria-label={`${it.name} weghalen`} onClick={() => set({ items: cmd.items.filter((_, j) => j !== i) })}><Icon name="close" size={14} /></button>
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+      {cmd.kind === 'menu' && (
+        <div className="stack" style={{ gap: 8 }}>
+          <input className="input" value={cmd.meal} maxLength={120} onChange={(e) => set({ meal: e.target.value, recipe_id: null })} aria-label="Maaltijd" />
+          <div className="row">
+            <input className="input grow" type="date" value={cmd.date} onChange={(e) => e.target.value && set({ date: e.target.value })} aria-label="Dag" />
+            <span className="small bold" style={{ minWidth: 80 }}>{DAYS[new Date(cmd.date + 'T12:00:00').getDay()]}</span>
+          </div>
+          {cmd.recipe_id && <span className="tiny muted">Recept gevonden: {recipes.find((r) => r.id === cmd.recipe_id)?.title}</span>}
+        </div>
+      )}
+      {cmd.kind === 'agenda' && (
+        <div className="stack" style={{ gap: 8 }}>
+          <input className="input" value={cmd.title} maxLength={120} onChange={(e) => set({ title: e.target.value })} aria-label="Afspraak" />
+          <div className="row">
+            <input className="input grow" type="date" value={cmd.date} onChange={(e) => e.target.value && set({ date: e.target.value })} aria-label="Dag" />
+            <input className="input" style={{ width: 120 }} type="time" value={cmd.time || ''} onChange={(e) => set({ time: e.target.value || null })} aria-label="Uur" />
+          </div>
+          <span className="tiny muted">{DAYS[new Date(cmd.date + 'T12:00:00').getDay()]}{cmd.time ? ` om ${cmd.time}` : ', hele dag'}{cmd.who ? ` · ${cmd.who}` : ''}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -226,7 +226,7 @@ export function parseSpeech(raw, opts = {}) {
   const text = String(raw || '').trim();
   if (!text) return [];
   const parts = text
-    .split(/\s*(?:,|;|\ben daarna\b|\ben ook\b|\ben\b|\bplus\b)\s*(?=(?:[^\s]+\s+){0,3}?(?:€\s*)?\d|(?:[^\s]+\s+){0,3}?[a-zë]+(?:en)?(?:twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig|honderd|duizend|tien|twaalf|elf)\b)/i)
+    .split(/\s*(?:,(?!\d)|(?<!\d),|;|\ben daarna\b|\ben ook\b|\ben\b|\bplus\b)\s*(?=(?:[^\s]+\s+){0,3}?(?:€\s*)?\d|(?:[^\s]+\s+){0,3}?[a-zë]+(?:en)?(?:twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig|honderd|duizend|tien|twaalf|elf)\b)/i)
     .filter((p) => p && p.trim());
   // Alleen opsplitsen als elk deel een bedrag heeft; anders is het één opdracht.
   const parsed = parts.map((p) => parseOne(p, opts));

@@ -8,7 +8,7 @@ import { category } from '../lib/categories.js';
 import { dayLabel, longToday, money } from '../lib/format.js';
 import { budgetRows, groupByDate, perMonth, summarize } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, entries, chartEntries, months, budgets, onDelete, onOpenChart, onOpenBudgets }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, entries, chartEntries, months, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
   const sum = useMemo(() => summarize(entries), [entries]);
   const rows = useMemo(() => budgetRows(sum.byCategory, budgets).slice(0, 4), [sum, budgets]);
@@ -36,6 +36,17 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         </div>
       </div>
 
+      <div className="tiles stagger" aria-label="Vandaag thuis">
+        <button className="tile" onClick={onOpenMenu}>
+          <span className="tile-ico orange"><Icon name="pot" size={20} /></span>
+          <span className="grow"><span className="tiny muted" style={{ display: 'block' }}>Vanavond</span><b>{today.meal ? today.meal.meal : 'Nog niets gepland'}</b></span>
+        </button>
+        <button className="tile" onClick={onOpenList}>
+          <span className="tile-ico green"><Icon name="cart" size={20} /></span>
+          <span className="grow"><span className="tiny muted" style={{ display: 'block' }}>Boodschappen</span><b>{today.shopping ? `${today.shopping} op de lijst` : 'Lijst is leeg'}</b>{today.low > 0 && <span className="tiny" style={{ display: 'block', color: 'var(--orange)' }}>{today.low} bijna op in de voorraad</span>}</span>
+        </button>
+      </div>
+
       {isOwner && (
         <div className="seg" role="group" aria-label="Boekje">
           <button aria-pressed={!zaak} onClick={() => setBook('gezin')}>Gezin</button>
@@ -57,6 +68,14 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               <span>Uit: <b>{money(sum.expense)}</b></span>
             </div>
           </section>
+
+          {zaak && onOpenTax && (
+            <button className="card tile-wide" onClick={onOpenTax}>
+              <span className="tile-ico blue"><Icon name="scale" size={20} /></span>
+              <span className="grow"><b style={{ display: 'block' }}>Privé of zaak?</b><span className="tiny muted">Check een aankoop voor je ze doet</span></span>
+              <Icon name="next" size={18} />
+            </button>
+          )}
 
           <button className="card" onClick={onOpenChart} style={{ border: 0, textAlign: 'left' }} aria-label="Grafiek openen">
             <div className="spread" style={{ marginBottom: 8 }}>

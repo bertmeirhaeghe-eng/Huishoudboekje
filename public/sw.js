@@ -1,5 +1,5 @@
 // Eenvoudige service worker: de app zelf werkt offline, gegevens komen altijd live van de server.
-const CACHE = 'boekje-v3';
+const CACHE = 'boekje-v4';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));
   self.skipWaiting();

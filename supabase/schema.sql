@@ -112,6 +112,71 @@ drop policy if exists "budgetten" on public.budgets;
 create policy "budgetten" on public.budgets
   for all to authenticated using (public.can_see(household_id, book)) with check (public.can_see(household_id, book));
 
+-- ───────────── Thuis: boodschappen, voorraad, recepten, weekmenu (stap 4) ─────────────
+-- Dit deel is voor het hele gezin zichtbaar.
+
+create table if not exists public.shopping_items (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 80),
+  qty text check (qty is null or char_length(qty) <= 40),
+  source text check (source is null or char_length(source) <= 120),
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists shopping_household on public.shopping_items (household_id);
+
+create table if not exists public.pantry_items (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 80),
+  place text not null default 'kast' check (place in ('kast', 'koelkast', 'diepvries', 'andere')),
+  status text not null default 'ok' check (status in ('ok', 'bijna', 'op')),
+  updated_at timestamptz not null default now()
+);
+create index if not exists pantry_household on public.pantry_items (household_id);
+
+create table if not exists public.recipes (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 120),
+  servings integer check (servings is null or servings between 1 and 99),
+  ingredients jsonb not null default '[]'::jsonb check (jsonb_typeof(ingredients) = 'array' and pg_column_size(ingredients) < 50000),
+  steps text check (steps is null or char_length(steps) <= 20000),
+  photo text check (photo is null or char_length(photo) <= 150000),
+  created_at timestamptz not null default now()
+);
+create index if not exists recipes_household on public.recipes (household_id);
+
+create table if not exists public.menu_days (
+  household_id uuid not null references public.households(id) on delete cascade,
+  date date not null,
+  meal text not null check (char_length(meal) between 1 and 120),
+  recipe_id uuid references public.recipes(id) on delete set null,
+  primary key (household_id, date)
+);
+
+alter table public.shopping_items enable row level security;
+alter table public.pantry_items enable row level security;
+alter table public.recipes enable row level security;
+alter table public.menu_days enable row level security;
+
+drop policy if exists "gezin boodschappen" on public.shopping_items;
+create policy "gezin boodschappen" on public.shopping_items
+  for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
+
+drop policy if exists "gezin voorraad" on public.pantry_items;
+create policy "gezin voorraad" on public.pantry_items
+  for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
+
+drop policy if exists "gezin recepten" on public.recipes;
+create policy "gezin recepten" on public.recipes
+  for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
+
+drop policy if exists "gezin weekmenu" on public.menu_days;
+create policy "gezin weekmenu" on public.menu_days
+  for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
+
 -- ───────────── Gezin aanmaken en aansluiten ─────────────
 
 create or replace function public.create_household(p_name text, p_display_name text) returns uuid
@@ -151,4 +216,8 @@ do $$
 begin
   begin alter publication supabase_realtime add table public.entries; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.budgets; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.shopping_items; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.pantry_items; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.recipes; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.menu_days; exception when duplicate_object then null; end;
 end $$;

@@ -72,3 +72,10 @@ test('meerdere boekingen in één zin', () => {
   assert.equal(one.length, 1);
   assert.equal(one[0].amount_cents, 800);
 });
+
+test('komma in een bedrag splitst de zin niet', () => {
+  const r = parseSpeech('Gisteren 64,30 bij Delhaize', { today: T });
+  assert.equal(r.length, 1);
+  assert.equal(r[0].amount_cents, 6430);
+  assert.equal(parseSpeech('12 euro bakker, 8 euro apotheek', { today: T }).length, 2);
+});

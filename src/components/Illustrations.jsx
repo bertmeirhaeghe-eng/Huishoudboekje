@@ -82,3 +82,67 @@ export function CoinStack() {
     </svg>
   );
 }
+
+export function BasketIllustration({ width = 170 }) {
+  return (
+    <svg className="illu" width={width} viewBox="0 0 200 150" role="img" aria-label="Boodschappenmand">
+      <ellipse cx="100" cy="138" rx="64" ry="7" fill="#16202A" opacity="0.07" />
+      <g className="float">
+        <rect x="58" y="34" width="22" height="40" rx="6" fill="#FFFFFF" stroke="#5B9BD5" strokeWidth="3" />
+        <rect x="58" y="34" width="22" height="12" rx="5" fill="#5B9BD5" />
+      </g>
+      <g className="float2">
+        <path d="M104 56c0-14 10-22 20-22s20 8 20 22z" fill="#F2B63C" />
+        <path d="M114 44c3-4 7-5 10-5" stroke="#fff" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.7" />
+      </g>
+      <g className="spin" style={{ transformOrigin: '92px 52px' }}>
+        <circle cx="92" cy="52" r="11" fill="#E5533D" />
+        <path d="M92 41c1-5 4-7 7-7" stroke="#0B7A5E" strokeWidth="3" strokeLinecap="round" fill="none" />
+      </g>
+      <path d="M40 70h120l-12 58a8 8 0 0 1-8 6H60a8 8 0 0 1-8-6z" fill="#0B7A5E" />
+      <path d="M40 70h120" stroke="#075A45" strokeWidth="6" strokeLinecap="round" />
+      <path d="M70 84v36M90 84v36M110 84v36M130 84v36" stroke="#4FD1A5" strokeWidth="4" strokeLinecap="round" opacity="0.5" />
+      <path d="M62 70c0-26 16-40 38-40s38 14 38 40" fill="none" stroke="#075A45" strokeWidth="5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function PotIllustration({ width = 170 }) {
+  return (
+    <svg className="illu" width={width} viewBox="0 0 200 150" role="img" aria-label="Kookpot met stoom">
+      <ellipse cx="100" cy="138" rx="66" ry="7" fill="#16202A" opacity="0.07" />
+      <g className="float" opacity="0.6">
+        <path d="M78 46c-8-8 8-14 0-24" stroke="#9AA6B2" strokeWidth="5" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="float2" opacity="0.6">
+        <path d="M100 42c-8-8 8-14 0-26" stroke="#9AA6B2" strokeWidth="5" strokeLinecap="round" fill="none" />
+        <path d="M122 46c-8-8 8-14 0-24" stroke="#9AA6B2" strokeWidth="5" strokeLinecap="round" fill="none" />
+      </g>
+      <rect x="44" y="60" width="112" height="14" rx="7" fill="#9C3B53" />
+      <rect x="90" y="50" width="20" height="12" rx="5" fill="#9C3B53" />
+      <path d="M50 74h100v40a18 18 0 0 1-18 18H68a18 18 0 0 1-18-18z" fill="#E5533D" />
+      <path d="M62 88h40" stroke="#fff" strokeWidth="5" strokeLinecap="round" opacity="0.35" />
+      <rect x="28" y="82" width="22" height="9" rx="4.5" fill="#9C3B53" />
+      <rect x="150" y="82" width="22" height="9" rx="4.5" fill="#9C3B53" />
+    </svg>
+  );
+}
+
+export function CalendarIllustration({ width = 160 }) {
+  return (
+    <svg className="illu" width={width} viewBox="0 0 200 150" role="img" aria-label="Kalender">
+      <ellipse cx="100" cy="138" rx="60" ry="7" fill="#16202A" opacity="0.07" />
+      <rect x="46" y="28" width="108" height="104" rx="14" fill="#fff" stroke="#E3E7EB" strokeWidth="3" />
+      <path d="M46 42a14 14 0 0 1 14-14h80a14 14 0 0 1 14 14v12H46z" fill="#2856A6" />
+      <rect x="70" y="18" width="8" height="22" rx="4" fill="#16202A" />
+      <rect x="122" y="18" width="8" height="22" rx="4" fill="#16202A" />
+      {[0, 1, 2, 3].map((c) => [0, 1, 2].map((r) => (
+        <rect key={c + '-' + r} x={60 + c * 22} y={66 + r * 20} width="14" height="12" rx="3" fill={c === 2 && r === 1 ? '#C24E14' : '#E6EDF8'} />
+      )))}
+      <g className="float2">
+        <circle cx="150" cy="112" r="20" fill="#0B7A5E" />
+        <path d="M141 112l6 6 12-12" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </g>
+    </svg>
+  );
+}
