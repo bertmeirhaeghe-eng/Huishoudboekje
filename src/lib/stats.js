@@ -38,6 +38,20 @@ export function budgetMonth(e, earlyDays = 0) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Valt een boeking in de gekozen periode? period = 'maand' of 'jaar'.
+// Ook in een jaar geldt de regel van de vroege inkomsten: een storting op 30 december telt voor januari van het volgende jaar.
+export function inPeriod(e, month, period = 'maand', earlyDays = 0) {
+  const m = budgetMonth(e, earlyDays);
+  return period === 'jaar' ? m.slice(0, 4) === month.slice(0, 4) : m === month;
+}
+
+// Totalen per categorie voor één soort ('in' of 'uit'), grootste eerst.
+export function totalsByCategory(entries, type) {
+  const out = {};
+  for (const e of entries) if (e.type === type) out[e.category] = (out[e.category] || 0) + e.amount_cents;
+  return Object.entries(out).sort((a, b) => b[1] - a[1]);
+}
+
 // Groepeer per maand ("2026-11") voor de grafiek.
 export function perMonth(entries, months, earlyDays = 0) {
   const out = Object.fromEntries(months.map((m) => [m, { month: m, income: 0, expense: 0 }]));

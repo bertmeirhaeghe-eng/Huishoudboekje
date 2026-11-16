@@ -3,14 +3,25 @@ import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { category } from '../lib/categories.js';
 import { money, monthLabel, monthShortLabel, shiftMonth } from '../lib/format.js';
-import { budgetMonth, perMonth, summarize } from '../lib/stats.js';
+import { inPeriod, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
 
-export function MonthSwitcher({ month, setMonth }) {
+// Bovenaan: kies een maand, of (met period/setPeriod) een heel jaar.
+export function MonthSwitcher({ month, setMonth, period = 'maand', setPeriod }) {
+  const jaar = period === 'jaar';
+  const step = jaar ? 12 : 1;
   return (
-    <div className="spread card" style={{ padding: 6 }}>
-      <button className="icon-btn" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Vorige maand"><Icon name="back" /></button>
-      <span className="bold" style={{ textTransform: 'capitalize' }}>{monthLabel(month)}</span>
-      <button className="icon-btn" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Volgende maand"><Icon name="next" /></button>
+    <div className="card" style={{ padding: 6 }}>
+      <div className="spread">
+        <button className="icon-btn" onClick={() => setMonth(shiftMonth(month, -step))} aria-label={jaar ? 'Vorig jaar' : 'Vorige maand'}><Icon name="back" /></button>
+        <span className="bold" style={{ textTransform: 'capitalize' }}>{jaar ? `Heel ${month.slice(0, 4)}` : monthLabel(month)}</span>
+        <button className="icon-btn" onClick={() => setMonth(shiftMonth(month, step))} aria-label={jaar ? 'Volgend jaar' : 'Volgende maand'}><Icon name="next" /></button>
+      </div>
+      {setPeriod && (
+        <div className="seg period-seg" role="group" aria-label="Periode">
+          <button aria-pressed={!jaar} onClick={() => setPeriod('maand')}>Maand</button>
+          <button aria-pressed={jaar} onClick={() => setPeriod('jaar')}>Jaar</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -50,22 +61,23 @@ export function MonthBars({ series, compact = false }) {
   );
 }
 
-export default function ChartScreen({ book, month, setMonth, entries, months, earlyDays = 0 }) {
+export default function ChartScreen({ book, month, setMonth, period = 'maand', setPeriod, entries, months, earlyDays = 0 }) {
   const series = useMemo(() => perMonth(entries, months, earlyDays), [entries, months, earlyDays]);
-  const monthEntries = useMemo(() => entries.filter((e) => budgetMonth(e, earlyDays) === month), [entries, month, earlyDays]);
+  const monthEntries = useMemo(() => entries.filter((e) => inPeriod(e, month, period, earlyDays)), [entries, month, period, earlyDays]);
   const sum = useMemo(() => summarize(monthEntries), [monthEntries]);
-  const income = Object.entries(monthEntries.filter((e) => e.type === 'in').reduce((a, e) => ({ ...a, [e.category]: (a[e.category] || 0) + e.amount_cents }), {})).sort((a, b) => b[1] - a[1]);
+  const income = totalsByCategory(monthEntries, 'in');
+  const when = period === 'jaar' ? 'dit jaar' : 'deze maand';
   const cats = Object.entries(sum.byCategory).sort((a, b) => b[1] - a[1]);
   const max = cats.length ? cats[0][1] : 1;
 
   return (
     <div className="stack">
       <h1>Grafiek {book === 'zaak' ? '(zaak)' : ''}</h1>
-      <MonthSwitcher month={month} setMonth={setMonth} />
+      <MonthSwitcher month={month} setMonth={setMonth} period={period} setPeriod={setPeriod} />
       <div className="card"><MonthBars series={series} /></div>
       <h2>Waar ging het geld naartoe?</h2>
-      <div className="card stack stagger" style={{ gap: 12 }} key={month + book}>
-        {cats.length === 0 && <span className="small muted">Nog geen uitgaven deze maand.</span>}
+      <div className="card stack stagger" style={{ gap: 12 }} key={period + month + book}>
+        {cats.length === 0 && <span className="small muted">Nog geen uitgaven {when}.</span>}
         {cats.map(([id, v]) => (
           <div key={id}>
             <div className="spread small" style={{ marginBottom: 6 }}>
@@ -77,8 +89,8 @@ export default function ChartScreen({ book, month, setMonth, entries, months, ea
         ))}
       </div>
       <h2>Waar kwam het geld vandaan?</h2>
-      <div className="card stack" style={{ gap: 10 }} key={'in' + month + book}>
-        {income.length === 0 && <span className="small muted">Nog geen inkomsten deze maand.</span>}
+      <div className="card stack" style={{ gap: 10 }} key={'in' + period + month + book}>
+        {income.length === 0 && <span className="small muted">Nog geen inkomsten {when}.</span>}
         {income.map(([id, v]) => (
           <div key={id} className="spread small">
             <span className="row" style={{ gap: 10 }}><CatIcon id={id} size={18} /><span className="bold">{category(id).name}</span></span>

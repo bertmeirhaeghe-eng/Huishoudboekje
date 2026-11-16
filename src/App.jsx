@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { store } from './lib/store.js';
-import { monthKey, monthRange, shiftMonth } from './lib/format.js';
+import { monthKey, monthRange, shiftMonth, yearMonths } from './lib/format.js';
 import Icon from './components/Icon.jsx';
 import Auth from './components/Auth.jsx';
 import Setup from './components/Setup.jsx';
@@ -18,7 +18,7 @@ import TaxHelper from './components/TaxHelper.jsx';
 import BankImport from './components/BankImport.jsx';
 import Board from './components/Board.jsx';
 import { useHome } from './lib/useHome.js';
-import { budgetMonth } from './lib/stats.js';
+import { budgetMonth, inPeriod } from './lib/stats.js';
 import { getEarlyDays, setEarlyDays as saveEarlyDays } from './lib/prefs.js';
 import { addDays, mealFor } from './lib/kitchen.js';
 import { startsOnBoard } from './lib/prefs.js';
@@ -56,6 +56,7 @@ function Boekje({ household, onHouseholdChange }) {
   const [screen, setScreen] = useState(() => (startsOnBoard() ? 'bord' : 'overzicht'));
   const [book, setBook] = useState('gezin');
   const [month, setMonth] = useState(monthKey());
+  const [period, setPeriod] = useState('maand'); // maand | jaar
   const [entries, setEntries] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState('');
@@ -73,13 +74,16 @@ function Boekje({ household, onHouseholdChange }) {
   const [earlyDays, setEarlyDaysState] = useState(getEarlyDays);
   const setEarlyDays = (n) => { saveEarlyDays(n); setEarlyDaysState(n); };
 
-  const months = useMemo(() => Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1)), [month]);
+  const months = useMemo(
+    () => (period === 'jaar' ? yearMonths(month) : Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1))),
+    [month, period],
+  );
 
   const load = useCallback(async () => {
     try {
       // Een paar dagen extra: vroege inkomsten van eind vorige maand tellen mee.
       const from = addDays(monthRange(months[0]).from, -10);
-      const to = monthRange(month).to;
+      const to = monthRange(months[months.length - 1]).to;
       const [e, b] = await Promise.all([store.listEntries(household.id, from, to), store.listBudgets(household.id)]);
       setEntries(e);
       setBudgets(b);
@@ -87,7 +91,7 @@ function Boekje({ household, onHouseholdChange }) {
     } catch (err) {
       setError(err.message);
     }
-  }, [household.id, month, months]);
+  }, [household.id, months]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => store.subscribe(household.id, load), [household.id, load]);
@@ -99,6 +103,7 @@ function Boekje({ household, onHouseholdChange }) {
 
   const bookEntries = useMemo(() => entries.filter((e) => e.book === book), [entries, book]);
   const monthEntries = useMemo(() => bookEntries.filter((e) => budgetMonth(e, earlyDays) === month), [bookEntries, month, earlyDays]);
+  const periodEntries = useMemo(() => bookEntries.filter((e) => inPeriod(e, month, period, earlyDays)), [bookEntries, month, period, earlyDays]);
   const bookBudgets = useMemo(() => Object.fromEntries(budgets.filter((b) => b.book === book).map((b) => [b.category, b.amount_cents])), [budgets, book]);
 
   const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
@@ -128,7 +133,8 @@ function Boekje({ household, onHouseholdChange }) {
     for (const entry of list) await store.addEntry({ ...entry, household_id: household.id });
     const last = list[list.length - 1];
     if (last.book !== book) setBook(last.book);
-    if (budgetMonth(last, earlyDays) !== month) setMonth(budgetMonth(last, earlyDays));
+    const lastMonth = budgetMonth(last, earlyDays);
+    if (period === 'jaar' ? lastMonth.slice(0, 4) !== month.slice(0, 4) : lastMonth !== month) setMonth(lastMonth);
     await load();
     setDraft(null);
     go('overzicht');
@@ -153,7 +159,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'budgetten') {
     content = <Budgets {...common} budgets={bookBudgets} entries={monthEntries} onChange={load} />;
   } else if (screen === 'grafiek') {
-    content = <Chart {...common} entries={bookEntries} months={months} earlyDays={earlyDays} />;
+    content = <Chart {...common} period={period} setPeriod={setPeriod} entries={bookEntries} months={months} earlyDays={earlyDays} />;
   } else if (screen === 'meer') {
     content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
@@ -172,7 +178,9 @@ function Boekje({ household, onHouseholdChange }) {
         {...common}
         isOwner={isOwner}
         setBook={setBook}
-        entries={monthEntries}
+        period={period}
+        setPeriod={setPeriod}
+        entries={periodEntries}
         chartEntries={bookEntries}
         months={months}
         earlyDays={earlyDays}

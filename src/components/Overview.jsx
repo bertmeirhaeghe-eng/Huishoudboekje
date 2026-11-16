@@ -6,13 +6,19 @@ import { useCountUp } from '../lib/anim.js';
 import { MonthBars, MonthSwitcher } from './Chart.jsx';
 import { category } from '../lib/categories.js';
 import { dayLabel, longToday, monthLabel, money } from '../lib/format.js';
-import { budgetMonth, budgetRows, groupByDate, perMonth, summarize } from '../lib/stats.js';
+import { budgetMonth, budgetRows, groupByDate, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
   const [kind, setKind] = useState('uit');
   const sum = useMemo(() => summarize(entries), [entries]);
-  const rows = useMemo(() => budgetRows(sum.byCategory, budgets).slice(0, 4), [sum, budgets]);
+  const jaar = period === 'jaar';
+  const year = month.slice(0, 4);
+  // In het jaaroverzicht: maandbudget x 12.
+  const rows = useMemo(() => {
+    const b = jaar ? Object.fromEntries(Object.entries(budgets).map(([k, v]) => [k, v * 12])) : budgets;
+    return budgetRows(sum.byCategory, b).slice(0, 4);
+  }, [sum, budgets, jaar]);
   const groups = useMemo(() => groupByDate(entries.filter((e) => e.type === kind)), [entries, kind]);
   const series = useMemo(() => perMonth(chartEntries, months, earlyDays), [chartEntries, months, earlyDays]);
   const names = Object.fromEntries(household.members.map((m) => [m.user_id, m.display_name]));
@@ -55,15 +61,15 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         </div>
       )}
 
-      <MonthSwitcher month={month} setMonth={setMonth} />
+      <MonthSwitcher month={month} setMonth={setMonth} period={period} setPeriod={setPeriod} />
 
       <div className="two-col">
         <div className="stack">
-          <section className={'hero' + (zaak ? ' zaak' : '')} aria-label="Saldo deze maand">
-            <span className="small bold" style={{ opacity: 0.92 }}>{zaak ? 'Resultaat vennootschap' : 'Nog te besteden'}</span>
+          <section className={'hero' + (zaak ? ' zaak' : '')} aria-label={jaar ? `Saldo ${year}` : 'Saldo deze maand'}>
+            <span className="small bold" style={{ opacity: 0.92 }}>{jaar ? (zaak ? `Resultaat vennootschap ${year}` : `Saldo heel ${year}`) : zaak ? 'Resultaat vennootschap' : 'Nog te besteden'}</span>
             <CoinStack />
             <span className="big" aria-label={money(sum.balance)}>{money(shown, { round: Math.abs(sum.balance) >= 100000 })}</span>
-            <div className="bar" key={book + month}><span style={{ width: `${Math.round(spentRatio * 100)}%` }} /></div>
+            <div className="bar" key={book + period + month}><span style={{ width: `${Math.round(spentRatio * 100)}%` }} /></div>
             <div className="spread small">
               <span>In: <b>{money(sum.income)}</b></span>
               <span>Uit: <b>{money(sum.expense)}</b></span>
@@ -80,7 +86,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
 
           <button className="card" onClick={onOpenChart} style={{ border: 0, textAlign: 'left' }} aria-label="Grafiek openen">
             <div className="spread" style={{ marginBottom: 8 }}>
-              <h2>Laatste 6 maanden</h2>
+              <h2>{jaar ? `Per maand in ${year}` : 'Laatste 6 maanden'}</h2>
               <Icon name="next" size={18} />
             </div>
             <MonthBars series={series} compact />
@@ -88,11 +94,11 @@ export default function Overview({ household, isOwner, book, setBook, month, set
 
           <section className="stack" style={{ gap: 10 }}>
             <div className="spread">
-              <h2>Budgetten</h2>
+              <h2>{jaar ? 'Budgetten (heel jaar)' : 'Budgetten'}</h2>
               <button className="tiny bold" onClick={onOpenBudgets} style={{ border: 0, background: 'none', color: zaak ? 'var(--blue)' : 'var(--green)', minHeight: 44 }}>Aanpassen</button>
             </div>
             {rows.length === 0 && <div className="card small muted">Nog geen budgetten. Tik op Aanpassen om er een paar in te stellen.</div>}
-            <div className="stack stagger" style={{ gap: 10 }} key={book + month}>
+            <div className="stack stagger" style={{ gap: 10 }} key={book + period + month}>
             {rows.map((r) => (
               <div className="card" key={r.id}>
                 <div className="spread small" style={{ marginBottom: 8 }}>
@@ -108,6 +114,9 @@ export default function Overview({ household, isOwner, book, setBook, month, set
           </section>
         </div>
 
+        {jaar ? (
+          <YearDetail series={series} entries={entries} sum={sum} kind={kind} setKind={setKind} year={year} onPickMonth={(m) => { setMonth(m); setPeriod('maand'); }} keyBase={book + month} />
+        ) : (
         <section className="stack" style={{ gap: 10 }}>
           <h2>Boekingen</h2>
           <div className="seg" role="group" aria-label="Soort boekingen">
@@ -148,6 +157,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
           ))}
           </div>
         </section>
+        )}
       </div>
 
       {open && (
@@ -159,6 +169,51 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         />
       )}
     </div>
+  );
+}
+
+// Rechterkolom van het jaaroverzicht: elke maand op een rij, en waar het geld naartoe ging of vandaan kwam.
+function YearDetail({ series, entries, sum, kind, setKind, year, onPickMonth, keyBase }) {
+  const cats = useMemo(() => totalsByCategory(entries, kind), [entries, kind]);
+  const total = kind === 'in' ? sum.income : sum.expense;
+  const max = cats.length ? cats[0][1] : 1;
+  return (
+    <section className="stack" style={{ gap: 10 }}>
+      <h2>Per maand</h2>
+      <div className="card list" key={'m' + keyBase}>
+        {series.map((s) => {
+          const saldo = s.income - s.expense;
+          const leeg = !s.income && !s.expense;
+          return (
+            <button key={s.month} className="entry" onClick={() => onPickMonth(s.month)} aria-label={`${monthLabel(s.month)} openen`}>
+              <span className="bold grow" style={{ textTransform: 'capitalize', opacity: leeg ? 0.5 : 1 }}>{monthLabel(s.month).split(' ')[0]}</span>
+              <span className="small" style={{ textAlign: 'right' }}>
+                <span className="amt in" style={{ display: 'block' }}>+ {money(s.income, { round: true })}</span>
+                <span className="amt" style={{ display: 'block' }}>− {money(s.expense, { round: true })}</span>
+              </span>
+              <span className="small bold" style={{ minWidth: 76, textAlign: 'right', color: saldo < 0 ? 'var(--orange)' : 'var(--green)' }}>{leeg ? '' : `${saldo < 0 ? '− ' : '+ '}${money(Math.abs(saldo), { round: true })}`}</span>
+            </button>
+          );
+        })}
+      </div>
+      <h2>Per categorie</h2>
+      <div className="seg" role="group" aria-label="Soort">
+        <button aria-pressed={kind === 'uit'} onClick={() => setKind('uit')}>Uitgaven · {money(sum.expense, { round: true })}</button>
+        <button aria-pressed={kind === 'in'} onClick={() => setKind('in')}>Inkomsten · {money(sum.income, { round: true })}</button>
+      </div>
+      <div className="card stack stagger" style={{ gap: 12 }} key={kind + keyBase}>
+        {cats.length === 0 && <span className="small muted">{kind === 'in' ? `Nog geen inkomsten in ${year}.` : `Nog geen uitgaven in ${year}.`}</span>}
+        {cats.map(([id, v]) => (
+          <div key={id}>
+            <div className="spread small" style={{ marginBottom: 6 }}>
+              <span className="row" style={{ gap: 10 }}><CatIcon id={id} size={18} /><span className="bold">{category(id).name}</span></span>
+              <span className="muted">{money(v, { round: true })} · {total ? Math.round((v / total) * 100) : 0}%</span>
+            </div>
+            <div className="meter"><span style={{ width: `${Math.round((v / max) * 100)}%` }} /></div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
