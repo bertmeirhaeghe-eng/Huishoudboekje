@@ -8,6 +8,7 @@ import * as gcal from '../lib/gcal.js';
 import { forgetCalendar } from './Agenda.jsx';
 import { forgetPhotos } from '../lib/photos.js';
 import { setStartsOnBoard, startsOnBoard } from '../lib/prefs.js';
+import { canPrompt, isApple, isInstalled, onInstallChange, promptInstall } from '../lib/install.js';
 
 export default function Settings({ household, onChange, onOpenTax, onOpenImport, onOpenBoard, earlyDays = 3, setEarlyDays }) {
   const [msg, setMsg] = useState('');
@@ -35,6 +36,8 @@ export default function Settings({ household, onChange, onOpenTax, onOpenImport,
   return (
     <div className="stack" style={{ maxWidth: 640 }}>
       <h1>Meer</h1>
+
+      <InstallCard />
 
       <section className="card stack" style={{ gap: 12 }}>
         <h2>Gezinsleden</h2>
@@ -193,6 +196,34 @@ function GoogleCalendar({ isOwner }) {
       )}
       {error && <div className="error">{error}</div>}
       {msg && <span className="small muted">{msg}</span>}
+    </section>
+  );
+}
+
+function InstallCard() {
+  const [, refresh] = useState(0);
+  useEffect(() => onInstallChange(() => refresh((n) => n + 1)), []);
+  if (isInstalled()) return null;
+  const apple = isApple();
+  return (
+    <section className="card stack" style={{ gap: 10 }}>
+      <h2>Zet de app op je beginscherm</h2>
+      <span className="small muted">Dan open je het huishoudboekje met één tik, zonder adresbalk, net als een gewone app.</span>
+      {canPrompt() ? (
+        <button className="btn" onClick={promptInstall}><Icon name="download" /> App installeren</button>
+      ) : apple ? (
+        <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
+          <li>Open deze pagina in <b>Safari</b>.</li>
+          <li>Tik op de <b>Deel-knop</b> <Icon name="share" size={16} /> (vierkantje met pijltje omhoog).</li>
+          <li>Kies <b>Zet op beginscherm</b> en tik op <b>Voeg toe</b>.</li>
+        </ol>
+      ) : (
+        <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
+          <li>Open deze pagina in <b>Chrome</b>.</li>
+          <li>Tik rechtsboven op de <b>drie puntjes</b>.</li>
+          <li>Kies <b>App installeren</b> (of <b>Toevoegen aan startscherm</b>).</li>
+        </ol>
+      )}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 // Eenvoudige service worker: de app zelf werkt offline, gegevens komen altijd live van de server.
-const CACHE = 'boekje-v4';
+const CACHE = 'boekje-v5';
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './apple-touch-icon.png'])));
   self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
