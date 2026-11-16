@@ -7,3 +7,7 @@ export const SUPABASE_KEY = 'sb_publishable_Fnf-FjXunlfzAIChnooZgQ_r9uDdD5Q';
 // Google Agenda: de "Client ID" van een OAuth-client (type Webtoepassing) uit Google Cloud.
 // Ook die is publiek bedoeld. Leeg = de app opent Google Agenda met de afspraak al ingevuld.
 export const GOOGLE_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
+
+// Naam (slug) van de Supabase-functie die voorraadfoto's bekijkt (in Supabase heet ze "voorraad-foto").
+// https://<project>.supabase.co/functions/v1/<deze-naam>
+export const PANTRY_FUNCTION = import.meta.env?.VITE_PANTRY_FUNCTION || 'swift-responder';
