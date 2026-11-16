@@ -214,6 +214,10 @@ function HomeCard({ cmd, setCmd, recipes }) {
       {cmd.kind === 'menu' && (
         <div className="stack" style={{ gap: 8 }}>
           <input className="input" value={cmd.meal} maxLength={120} onChange={(e) => set({ meal: e.target.value, recipe_id: null })} aria-label="Maaltijd" />
+          <div className="seg small-seg" role="group" aria-label="Wanneer">
+            <button aria-pressed={cmd.slot === 'middag'} onClick={() => set({ slot: 'middag' })}>'s Middags</button>
+            <button aria-pressed={cmd.slot !== 'middag'} onClick={() => set({ slot: 'avond' })}>'s Avonds</button>
+          </div>
           <div className="row">
             <input className="input grow" type="date" value={cmd.date} onChange={(e) => e.target.value && set({ date: e.target.value })} aria-label="Dag" />
             <span className="small bold" style={{ minWidth: 80 }}>{DAYS[new Date(cmd.date + 'T12:00:00').getDay()]}</span>

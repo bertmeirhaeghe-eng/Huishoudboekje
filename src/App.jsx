@@ -16,10 +16,12 @@ import Kitchen from './components/Kitchen.jsx';
 import Agenda, { saveEvent } from './components/Agenda.jsx';
 import TaxHelper from './components/TaxHelper.jsx';
 import BankImport from './components/BankImport.jsx';
+import Board from './components/Board.jsx';
 import { useHome } from './lib/useHome.js';
 import { budgetMonth } from './lib/stats.js';
 import { getEarlyDays, setEarlyDays as saveEarlyDays } from './lib/prefs.js';
-import { addDays } from './lib/kitchen.js';
+import { addDays, mealFor } from './lib/kitchen.js';
+import { startsOnBoard } from './lib/prefs.js';
 import { todayISO } from './lib/format.js';
 import { money } from './lib/format.js';
 import { category } from './lib/categories.js';
@@ -51,7 +53,7 @@ export default function App() {
 
 function Boekje({ household, onHouseholdChange }) {
   const isOwner = household.role === 'eigenaar';
-  const [screen, setScreen] = useState('overzicht');
+  const [screen, setScreen] = useState(() => (startsOnBoard() ? 'bord' : 'overzicht'));
   const [book, setBook] = useState('gezin');
   const [month, setMonth] = useState(monthKey());
   const [entries, setEntries] = useState([]);
@@ -112,7 +114,7 @@ function Boekje({ household, onHouseholdChange }) {
       setListTab('boodschappen'); go('lijst');
       toast(`${cmd.items.map((i) => i.name).join(', ')} op de lijst`);
     } else if (cmd.kind === 'menu') {
-      await home.act.setMenu(cmd.date, cmd.meal, cmd.recipe_id);
+      await home.act.setMenu(cmd.date, cmd.meal, cmd.recipe_id, cmd.slot || 'avond');
       setKitchenTab('menu'); setOpenRecipe(null); setMenuFocus(cmd.date); go('keuken');
       toast(`${cmd.meal} staat op het menu`);
     } else if (cmd.kind === 'agenda') {
@@ -153,7 +155,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'grafiek') {
     content = <Chart {...common} entries={bookEntries} months={months} earlyDays={earlyDays} />;
   } else if (screen === 'meer') {
-    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
+    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
     content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(budgetMonth({ date, type: 'uit' })); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
   } else if (screen === 'privezaak') {
@@ -163,7 +165,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'keuken') {
     content = <Kitchen home={home} tab={kitchenTab} setTab={setKitchenTab} toast={toast} openRecipe={openRecipe} setOpenRecipe={setOpenRecipe} focusDate={menuFocus} />;
   } else if (screen === 'agenda') {
-    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} />;
+    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} onOpenBoard={() => go('bord')} />;
   } else {
     content = (
       <Overview
@@ -178,13 +180,16 @@ function Boekje({ household, onHouseholdChange }) {
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
         onOpenChart={() => go('grafiek')}
         onOpenBudgets={() => go('budgetten')}
-        today={{ meal: home.menu.find((m) => m.date === todayISO()), shopping: home.shopping.filter((x) => !x.done).length, low: home.pantry.filter((p) => p.status !== 'ok').length }}
+        today={{ meal: mealFor(home.menu, todayISO(), 'avond'), shopping: home.shopping.filter((x) => !x.done).length, low: home.pantry.filter((p) => p.status !== 'ok').length }}
         onOpenList={() => { setListTab('boodschappen'); go('lijst'); }}
         onOpenMenu={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }}
         onOpenTax={() => go('privezaak')}
       />
     );
   }
+
+  // Het weekbord voor de tablet: volledig scherm, zonder menubalk.
+  if (screen === 'bord') return <Board home={home} onClose={() => go('agenda')} />;
 
   return (
     <div className={'app' + (book === 'zaak' ? ' zaak-mode' : '')}>
@@ -201,6 +206,7 @@ function Boekje({ household, onHouseholdChange }) {
         )}
         <NavBtn icon="pot" label="Keuken" on={screen === 'keuken'} onClick={() => { if (screen === 'keuken') setOpenRecipe(null); setMenuFocus(null); go('keuken'); }} />
         <NavBtn icon="calendar" label="Agenda" on={screen === 'agenda'} onClick={() => go('agenda')} />
+        <NavBtn icon="tablet" label="Weekbord" on={false} onClick={() => go('bord')} className="wide-only" />
         <NavBtn icon="gear" label="Meer" on={screen === 'meer' || screen === 'privezaak' || screen === 'import'} onClick={() => go('meer')} />
       </nav>
       <main className="main">
@@ -229,9 +235,9 @@ function Boekje({ household, onHouseholdChange }) {
 
 const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen'];
 
-function NavBtn({ icon, label, on, onClick, badge }) {
+function NavBtn({ icon, label, on, onClick, badge, className }) {
   return (
-    <button onClick={onClick} aria-current={on ? 'page' : undefined}>
+    <button onClick={onClick} aria-current={on ? 'page' : undefined} className={className}>
       <span className="nav-ico"><Icon name={icon} size={24} />{badge > 0 && <i className="badge">{badge > 99 ? '99+' : badge}</i>}</span>
       {label}
     </button>

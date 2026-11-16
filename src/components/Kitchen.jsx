@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { PotIllustration } from './Illustrations.jsx';
-import { addDays, checkIngredients, ingredientLine, mondayOf, parseIngredient, parseRecipeText, shoppingForWeek, weekDays } from '../lib/kitchen.js';
+import { addDays, checkIngredients, ingredientLine, mealFor, mealsOn, mondayOf, parseIngredient, parseRecipeText, shoppingForWeek, SLOT_LABEL, SLOTS, slotOf, weekDays } from '../lib/kitchen.js';
 import { todayISO } from '../lib/format.js';
 
 const DAY = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -73,17 +73,21 @@ function WeekMenu({ home, toast, onOpenRecipe, focusDate }) {
 
       <div className="week stagger" key={monday}>
         {days.map((iso) => {
-          const m = home.menu.find((x) => x.date === iso);
-          const r = m?.recipe_id && home.recipes.find((x) => x.id === m.recipe_id);
-          const need = r ? checkIngredients(r.ingredients || [], home.pantry, home.shopping).filter((i) => i.state === 'kopen' || i.state === 'bijna').length : 0;
+          const meals = mealsOn(home.menu, iso);
+          const rs = meals.map((m) => m.recipe_id && home.recipes.find((x) => x.id === m.recipe_id)).filter(Boolean);
+          const need = rs.reduce((n, r) => n + checkIngredients(r.ingredients || [], home.pantry, home.shopping).filter((i) => i.state === 'kopen' || i.state === 'bijna').length, 0);
+          const photo = rs.find((r) => r.photo)?.photo;
           return (
-            <button key={iso} className={'day' + (iso === today ? ' today' : '') + (m ? ' planned' : '')} onClick={() => setDay(iso)}>
+            <button key={iso} className={'day' + (iso === today ? ' today' : '') + (meals.length ? ' planned' : '')} onClick={() => setDay({ iso, slot: meals.length === 1 ? slotOf(meals[0]) : 'avond' })}>
               <span className="day-badge"><b>{DAY[d(iso).getDay()]}</b><span>{d(iso).getDate()}</span></span>
               <span className="grow" style={{ minWidth: 0 }}>
-                <span className="meal">{m ? m.meal : 'Nog niets gepland'}</span>
-                {r && <span className="tiny muted" style={{ display: 'block' }}>{need ? `${need} ${need === 1 ? 'ding' : 'dingen'} te kopen` : 'Alles in huis'}</span>}
+                {!meals.length && <span className="meal">Nog niets gepland</span>}
+                {meals.map((m) => (
+                  <span key={slotOf(m)} className="meal" style={{ display: 'block' }}>{meals.length > 1 || slotOf(m) === 'middag' ? <span className="tiny muted">{SLOT_LABEL[slotOf(m)]} </span> : null}{m.meal}</span>
+                ))}
+                {rs.length > 0 && <span className="tiny muted" style={{ display: 'block' }}>{need ? `${need} ${need === 1 ? 'ding' : 'dingen'} te kopen` : 'Alles in huis'}</span>}
               </span>
-              {r?.photo ? <img className="thumb" src={r.photo} alt="" /> : <Icon name={m ? 'pot' : 'plus'} size={20} />}
+              {photo ? <img className="thumb" src={photo} alt="" /> : <Icon name={meals.length ? 'pot' : 'plus'} size={20} />}
             </button>
           );
         })}
@@ -94,7 +98,7 @@ function WeekMenu({ home, toast, onOpenRecipe, focusDate }) {
       </button>
       <span className="tiny muted" style={{ textAlign: 'center' }}>Kies bij een dag een recept, dan kijk ik in de voorraad wat je nog moet kopen.</span>
 
-      {day && <DaySheet home={home} date={day} onClose={() => setDay(null)} onOpenRecipe={onOpenRecipe} />}
+      {day && <DaySheet key={day.iso} home={home} date={day.iso} initialSlot={day.slot} onClose={() => setDay(null)} onOpenRecipe={onOpenRecipe} />}
       {shop && (
         <PickSheet
           title="Op de boodschappenlijst zetten"
@@ -107,11 +111,13 @@ function WeekMenu({ home, toast, onOpenRecipe, focusDate }) {
   );
 }
 
-function DaySheet({ home, date, onClose, onOpenRecipe }) {
-  const m = home.menu.find((x) => x.date === date);
+function DaySheet({ home, date, initialSlot = 'avond', onClose, onOpenRecipe }) {
+  const [slot, setSlot] = useState(initialSlot);
+  const m = mealFor(home.menu, date, slot);
   const [text, setText] = useState(m?.meal || '');
   const [rid, setRid] = useState(m?.recipe_id || null);
-  const save = async (meal, recipeId) => { await home.act.setMenu(date, meal, recipeId); onClose(); };
+  const pickSlot = (s) => { const x = mealFor(home.menu, date, s); setSlot(s); setText(x?.meal || ''); setRid(x?.recipe_id || null); };
+  const save = async (meal, recipeId) => { await home.act.setMenu(date, meal, recipeId, slot); onClose(); };
   return (
     <div className="backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Wat eten we?" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '88dvh', overflowY: 'auto' }}>
@@ -121,6 +127,9 @@ function DaySheet({ home, date, onClose, onOpenRecipe }) {
             <h2>Wat eten we?</h2>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Sluiten" style={{ background: 'var(--bg)' }}><Icon name="close" /></button>
+        </div>
+        <div className="seg" role="group" aria-label="Wanneer">
+          {SLOTS.map((s) => <button key={s} aria-pressed={slot === s} onClick={() => pickSlot(s)}>{SLOT_LABEL[s]}{mealFor(home.menu, date, s) ? ' •' : ''}</button>)}
         </div>
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (text.trim()) save(text, rid); }}>
           <input className="input grow" value={text} maxLength={120} placeholder="bv. Soep met brood" onChange={(e) => { setText(e.target.value); setRid(null); }} aria-label="Maaltijd" />
@@ -278,6 +287,7 @@ function RecipeView({ home, recipe, toast, onBack, onEdit }) {
 
 function PlanSheet({ home, recipe, onClose, onDone }) {
   const today = todayISO();
+  const [slot, setSlot] = useState('avond');
   const days = Array.from({ length: 10 }, (_, i) => addDays(today, i));
   return (
     <div className="backdrop" onClick={onClose}>
@@ -286,11 +296,14 @@ function PlanSheet({ home, recipe, onClose, onDone }) {
           <h2>Welke dag?</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Sluiten" style={{ background: 'var(--bg)' }}><Icon name="close" /></button>
         </div>
+        <div className="seg" role="group" aria-label="Wanneer">
+          {SLOTS.map((s) => <button key={s} aria-pressed={slot === s} onClick={() => setSlot(s)}>{SLOT_LABEL[s]}</button>)}
+        </div>
         <div className="plan-days">
           {days.map((iso) => {
-            const m = home.menu.find((x) => x.date === iso);
+            const m = mealFor(home.menu, iso, slot);
             return (
-              <button key={iso} className="plan-day" onClick={async () => { await home.act.setMenu(iso, recipe.title, recipe.id); onDone(iso); }}>
+              <button key={iso} className="plan-day" onClick={async () => { await home.act.setMenu(iso, recipe.title, recipe.id, slot); onDone(iso); }}>
                 <b>{iso === today ? 'Vandaag' : DAY_LONG[d(iso).getDay()]}</b>
                 <span className="tiny muted">{short(iso)}{m ? ` · nu: ${m.meal}` : ''}</span>
               </button>

@@ -6,8 +6,10 @@ import { toCSV } from '../lib/stats.js';
 import { store } from '../lib/store.js';
 import * as gcal from '../lib/gcal.js';
 import { forgetCalendar } from './Agenda.jsx';
+import { forgetPhotos } from '../lib/photos.js';
+import { setStartsOnBoard, startsOnBoard } from '../lib/prefs.js';
 
-export default function Settings({ household, onChange, onOpenTax, onOpenImport, earlyDays = 3, setEarlyDays }) {
+export default function Settings({ household, onChange, onOpenTax, onOpenImport, onOpenBoard, earlyDays = 3, setEarlyDays }) {
   const [msg, setMsg] = useState('');
   const isOwner = household.role === 'eigenaar';
 
@@ -62,6 +64,8 @@ export default function Settings({ household, onChange, onOpenTax, onOpenImport,
       <MyName household={household} onChange={onChange} />
 
       <GoogleCalendar isOwner={isOwner} />
+
+      {onOpenBoard && <BoardSettings isOwner={isOwner} onOpen={onOpenBoard} />}
 
       {onOpenImport && (
         <button className="card tile-wide" onClick={onOpenImport}>
@@ -186,6 +190,62 @@ function GoogleCalendar({ isOwner }) {
         </>
       ) : (
         <span className="small muted">De eigenaar van het gezin kan de agenda hier koppelen.</span>
+      )}
+      {error && <div className="error">{error}</div>}
+      {msg && <span className="small muted">{msg}</span>}
+    </section>
+  );
+}
+
+function BoardSettings({ isOwner, onOpen }) {
+  const [start, setStart] = useState(startsOnBoard);
+  const [count, setCount] = useState(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { store.photoAlbumCount().then(setCount).catch(() => setCount(0)); }, []);
+
+  async function save(urls) {
+    setBusy(true); setError(''); setMsg('');
+    try {
+      await store.setPhotoAlbums(urls);
+      forgetPhotos();
+      const found = urls.length ? (await store.albumPhotos()).length : 0;
+      setCount(urls.length);
+      setText('');
+      setMsg(!urls.length ? 'Albums verwijderd.' : found ? `${found} foto's gevonden. Ze verschijnen in de ruststand.` : 'Opgeslagen, maar ik vond nog geen foto\'s. Staat het album op "delen via link"?');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card stack" style={{ gap: 10 }}>
+      <h2>Weekbord voor de tablet</h2>
+      <span className="small muted">De week in één oogopslag: wat jullie eten (middag en avond) en wat er in de agenda staat. Na 2 minuten zonder aanraking toont het foto's, met wat er vandaag op het programma staat.</span>
+      <button className="btn" onClick={onOpen}><Icon name="tablet" /> Weekbord openen</button>
+      <label className="row" style={{ cursor: "pointer", gap: 10 }}>
+        <input type="checkbox" checked={start} onChange={(e) => { setStart(e.target.checked); setStartsOnBoard(e.target.checked); }} style={{ width: 22, height: 22 }} />
+        <span className="small">Dit toestel opent altijd het weekbord</span>
+      </label>
+      <h3 className="small bold" style={{ marginTop: 6 }}>Foto's uit Google Foto's</h3>
+      {store.mode !== 'cloud' ? (
+        <span className="small muted">Kan pas als de app aan Supabase gekoppeld is.</span>
+      ) : isOwner ? (
+        <>
+          <span className="small muted">{count ? `${count} ${count === 1 ? 'album' : 'albums'} gekoppeld. ` : ''}Open een album in Google Foto's, tik op Delen en kies <b>Link maken</b>. Plak hier één link per regel (maximaal 10). De tablet kiest willekeurig uit alle albums.</span>
+          <textarea className="input area" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="https://photos.app.goo.gl/…" aria-label="Links naar gedeelde albums" />
+          <div className="row">
+            <button className="btn grow" disabled={!text.trim() || busy} onClick={() => save(text.split(/\s+/).filter(Boolean))}><Icon name="image" /> {busy ? 'Zoeken…' : count ? 'Albums vervangen' : 'Albums koppelen'}</button>
+            {count > 0 && <button className="btn ghost" disabled={busy} onClick={() => save([])}>Verwijderen</button>}
+          </div>
+        </>
+      ) : (
+        <span className="small muted">{count ? `${count} ${count === 1 ? 'album' : 'albums'} gekoppeld.` : 'De eigenaar van het gezin kan hier foto-albums koppelen.'}</span>
       )}
       {error && <div className="error">{error}</div>}
       {msg && <span className="small muted">{msg}</span>}

@@ -239,18 +239,26 @@ export function weekDays(monday) {
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
+// Twee maaltijden per dag. Oude rijen zonder 'slot' zijn avondeten.
+export const SLOTS = ['middag', 'avond'];
+export const SLOT_LABEL = { middag: "'s Middags", avond: "'s Avonds" };
+export const slotOf = (m) => (m?.slot === 'middag' ? 'middag' : 'avond');
+export const mealFor = (menu, date, slot) => menu.find((x) => x.date === date && slotOf(x) === slot) || null;
+export const mealsOn = (menu, date) => SLOTS.map((s) => mealFor(menu, date, s)).filter(Boolean);
+
 // Wat moet er gekocht worden voor alle recepten van deze week?
 export function shoppingForWeek(days, menu, recipes, pantry, shopping) {
   const out = [];
   for (const date of days) {
-    const m = menu.find((x) => x.date === date);
-    const r = m?.recipe_id && recipes.find((x) => x.id === m.recipe_id);
+    for (const m of menu.filter((x) => x.date === date)) {
+    const r = m.recipe_id && recipes.find((x) => x.id === m.recipe_id);
     if (!r) continue;
     for (const ing of checkIngredients(r.ingredients || [], pantry, shopping)) {
       if (ing.state === 'heb' || ing.state === 'op-lijst') continue;
       const same = out.find((o) => sameThing(o.name, ing.name));
       if (same) { if (!same.sources.includes(r.title)) same.sources.push(r.title); continue; }
       out.push({ name: ing.name, qty: ing.qty, state: ing.state, sources: [r.title] });
+    }
     }
   }
   return out;

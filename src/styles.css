@@ -128,11 +128,14 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; 
 
 .two-col { display: grid; gap: 16px; }
 
+.nav .wide-only { display: none; }
+
 /* Tablet en groter: zijbalk in plaats van onderbalk, inhoud naast elkaar */
 @media (min-width: 900px) {
   :root { --nav-h: 0px; }
   .nav { position: sticky; top: 0; height: 100dvh; width: 104px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 24px 0; border-top: 0; border-right: 1px solid var(--line); }
   .nav button { width: 84px; height: 64px; border-radius: 16px; margin: 0 auto; }
+  .nav .wide-only { display: flex; }
   .nav button[aria-current='page'] { background: var(--green-soft); color: var(--green-dark); }
   .nav .fab { order: -1; margin: 0 auto 12px; width: 64px; height: 64px; border-radius: 32px; }
   .main { padding: 28px 32px 40px; }
@@ -391,3 +394,60 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; 
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .cat-select { flex: 1; min-width: 0; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 13px; padding: 0 8px; }
 details summary { cursor: pointer; }
+
+/* ───────────── Weekbord (tablet) ───────────── */
+.board { min-height: 100dvh; display: flex; flex-direction: column; gap: 16px; padding: 20px 24px 24px; background: var(--bg); }
+.board-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.board-clock { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.board-date { font-size: 20px; font-weight: 600; color: var(--muted); margin-top: 6px; }
+.board-week { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; min-height: 0; }
+.board-day { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow: hidden; }
+.board-day.today { outline: 3px solid var(--green); background: linear-gradient(180deg, var(--green-soft), var(--card) 160px); }
+.board-day-title { font-size: 18px; margin: 0; }
+.board-day.today .board-day-title { color: var(--green-dark); }
+.board-items { display: flex; flex-direction: column; gap: 6px; }
+.board-item { display: flex; flex-direction: column; gap: 1px; padding: 7px 9px; border-left: 4px solid var(--blue); background: var(--blue-soft); border-radius: 4px 10px 10px 4px; }
+.board-item.meal { border-left-color: var(--orange); background: var(--orange-soft); }
+.board-item.meal .board-time { color: var(--orange); }
+.board-item.meal .board-what { font-weight: 700; }
+.board-item.none { background: transparent; border-left-color: var(--line); }
+.board-item.none .board-time, .board-item.none .board-what { color: var(--muted); font-weight: 500; }
+.board-what { font-size: 15px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
+.board-time { font-size: 13px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+
+/* Staande tablet of smal scherm: één dag per rij */
+@media (max-width: 899px), (orientation: portrait) {
+  .board-week { grid-template-columns: 1fr; }
+  .board-day { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: start; }
+  .board-clock { font-size: 44px; }
+}
+@media (max-width: 599px) {
+  .board-day { grid-template-columns: 1fr; }
+}
+
+/* Ruststand: foto's met klok en het programma van vandaag */
+.rest { position: fixed; inset: 0; z-index: 50; background: #0b0f14; color: #fff; overflow: hidden; cursor: pointer; animation: rest-in 1.2s ease; }
+@keyframes rest-in { from { opacity: 0; } }
+.slide { position: absolute; inset: 0; opacity: 0; transition: opacity 2s ease; }
+.slide.on { opacity: 1; }
+.slide-bg { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(32px) brightness(0.55); }
+.slide-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.slide.on .slide-img { animation: kenburns 22s ease-out both; }
+@keyframes kenburns { from { transform: scale(1); } to { transform: scale(1.06); } }
+.slide-empty { position: absolute; inset: 0; background: radial-gradient(circle at 20% 20%, #1d4d40, #0b0f14 70%); }
+.rest-shade { position: absolute; inset: auto 0 0 0; height: 55%; background: linear-gradient(transparent, rgba(0, 0, 0, 0.65)); pointer-events: none; }
+.rest-info { position: absolute; left: 40px; right: 40px; bottom: 36px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
+.rest-clock { font-size: 120px; font-weight: 800; line-height: 0.9; letter-spacing: -3px; font-variant-numeric: tabular-nums; }
+.rest-date { font-size: 28px; font-weight: 600; margin-top: 10px; opacity: 0.92; }
+.rest-card { background: rgba(10, 14, 18, 0.45); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; padding: 16px 20px; min-width: 300px; max-width: 46%; text-shadow: none; }
+.rest-card-title { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8; margin-bottom: 8px; }
+.rest-line { display: flex; gap: 14px; font-size: 20px; line-height: 1.35; padding: 3px 0; }
+.rest-k { flex: 0 0 104px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+@media (max-width: 899px), (orientation: portrait) {
+  .rest-info { flex-direction: column; align-items: stretch; left: 24px; right: 24px; }
+  .rest-card { max-width: none; min-width: 0; }
+  .rest-clock { font-size: 88px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide.on .slide-img { animation: none; }
+}

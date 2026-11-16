@@ -102,17 +102,24 @@ export const demoStore = {
     d.rows[table] = (d.rows[table] || []).filter((r) => !ids.includes(r.id));
     save(d);
   },
-  async setMenu(hid, date, meal, recipeId = null) {
+  async setMenu(hid, date, meal, recipeId = null, slot = 'avond') {
     const d = db();
     d.rows = d.rows || {};
-    const list = (d.rows.menu_days || []).filter((m) => m.date !== date);
-    if (meal) list.push({ household_id: hid, date, meal, recipe_id: recipeId });
+    const list = (d.rows.menu_days || []).filter((m) => !(m.date === date && (m.slot || 'avond') === slot));
+    if (meal) list.push({ household_id: hid, date, slot, meal, recipe_id: recipeId });
     d.rows.menu_days = list;
     save(d);
   },
   async setCalendarUrl() { throw new Error('De agenda koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
-  async hasCalendar() { return false; },
-  async calendarIcs() { return null; },
+  // Proefmodus: een agenda om te proberen kan je klaarzetten in 'boekje-demo-ics'.
+  async hasCalendar() { try { return Boolean(localStorage.getItem('boekje-demo-ics')); } catch { return false; } },
+  async calendarIcs() { try { return localStorage.getItem('boekje-demo-ics'); } catch { return null; } },
+  async setPhotoAlbums() { throw new Error('Foto-albums koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
+  async photoAlbumCount() { return 0; },
+  async albumPhotos() {
+    // In de proefmodus kan je zelf foto's klaarzetten (handig om de ruststand te proberen).
+    try { return JSON.parse(localStorage.getItem('boekje-demo-fotos') || '[]'); } catch { return []; }
+  },
   subscribe(_hid, fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
