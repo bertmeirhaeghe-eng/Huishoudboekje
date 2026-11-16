@@ -402,20 +402,20 @@ details summary { cursor: pointer; }
 .board-day.today { outline: 3px solid var(--green); background: linear-gradient(180deg, var(--green-soft), var(--card) 160px); }
 .board-day-title { font-size: 18px; margin: 0; }
 .board-day.today .board-day-title { color: var(--green-dark); }
-.board-meals { display: flex; flex-direction: column; gap: 8px; }
-.board-meal { display: flex; align-items: center; gap: 8px; background: var(--orange-soft); border-radius: 12px; padding: 8px 10px; min-height: 52px; }
-.board-meal b { display: block; font-size: 15px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
-.board-meal.none { background: var(--bg); }
-.board-meal.none b { color: var(--muted); font-weight: 500; }
-.board-meal img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
-.board-events { display: flex; flex-direction: column; gap: 6px; }
-.board-event { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-left: 4px solid var(--blue); background: var(--blue-soft); border-radius: 4px 10px 10px 4px; font-size: 15px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
+.board-items { display: flex; flex-direction: column; gap: 6px; }
+.board-item { display: flex; flex-direction: column; gap: 1px; padding: 7px 9px; border-left: 4px solid var(--blue); background: var(--blue-soft); border-radius: 4px 10px 10px 4px; }
+.board-item.meal { border-left-color: var(--orange); background: var(--orange-soft); }
+.board-item.meal .board-time { color: var(--orange); }
+.board-item.meal .board-what { font-weight: 700; }
+.board-item.none { background: transparent; border-left-color: var(--line); }
+.board-item.none .board-time, .board-item.none .board-what { color: var(--muted); font-weight: 500; }
+.board-what { font-size: 15px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
 .board-time { font-size: 13px; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
 
 /* Staande tablet of smal scherm: één dag per rij */
 @media (max-width: 899px), (orientation: portrait) {
   .board-week { grid-template-columns: 1fr; }
-  .board-day { display: grid; grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .board-day { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: start; }
   .board-clock { font-size: 44px; }
 }
 @media (max-width: 599px) {

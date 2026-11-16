@@ -31,3 +31,22 @@ export function sizedPhoto(url, w, h) {
   const base = String(url).replace(/=[^/]*$/, '');
   return `${base}=w${Math.min(2560, Math.round(w))}-h${Math.min(2560, Math.round(h))}`;
 }
+
+// Wanneer eten we? Zo staan de maaltijden tussen de afspraken op de juiste plek.
+export const MEAL_TIMES = { middag: ['12:00', '13:00'], avond: ['18:00', '19:00'] };
+
+// Alles van één dag in volgorde van het uur: eerst wat de hele dag duurt, dan per uur.
+// meals: { middag: {meal} | null, avond: {meal} | null }
+export function dayTimeline(meals, events = []) {
+  const items = [
+    ...Object.entries(MEAL_TIMES).map(([slot, [time, endTime]]) => ({ kind: 'meal', slot, time, endTime, meal: meals[slot] || null })),
+    ...events.map((e) => ({ kind: 'event', ...e })),
+  ];
+  const key = (x) => (x.time ? x.time : '');
+  return items.sort((a, b) => key(a).localeCompare(key(b)) || (a.kind === 'meal' ? -1 : 1) - (b.kind === 'meal' ? -1 : 1));
+}
+
+// Wat staat er nog te gebeuren? Alles waarvan het einde nog niet voorbij is.
+export function stillComing(items, now) {
+  return items.filter((x) => !x.time || (x.endTime || x.time) > now);
+}

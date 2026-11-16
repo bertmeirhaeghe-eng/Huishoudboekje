@@ -3,11 +3,11 @@ import Icon from './Icon.jsx';
 import { loadIcs } from './Agenda.jsx';
 import * as gcal from '../lib/gcal.js';
 import { eventsBetween } from '../lib/ics.js';
-import { addDays, mealFor, SLOT_LABEL, SLOTS } from '../lib/kitchen.js';
+import { addDays, mealFor, SLOT_LABEL } from '../lib/kitchen.js';
 import { todayISO } from '../lib/format.js';
 import { store } from '../lib/store.js';
 import { usePhotos } from '../lib/photos.js';
-import { boardDayTitle, nowTime, pickDayForIdle } from '../lib/board.js';
+import { boardDayTitle, dayTimeline, nowTime, pickDayForIdle, stillComing } from '../lib/board.js';
 
 const DAYS = 7;
 const IDLE_MS = 2 * 60000;
@@ -84,6 +84,7 @@ export default function Board({ home, onClose }) {
   }, []);
 
   const wakeUp = () => { last.current = Date.now(); setIdle(false); };
+  const mealsFor = (iso) => ({ middag: mealFor(home.menu, iso, 'middag'), avond: mealFor(home.menu, iso, 'avond') });
   const evOn = (iso) => (events || []).filter((e) => e.date === iso).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
   function fullscreen() {
@@ -110,33 +111,21 @@ export default function Board({ home, onClose }) {
 
       <div className="board-week">
         {days.map((iso) => {
-          const ev = evOn(iso);
           return (
             <section key={iso} className={'board-day' + (iso === today ? ' today' : '')} aria-label={boardDayTitle(iso, today)}>
               <h2 className="board-day-title">{boardDayTitle(iso, today)}</h2>
-              <div className="board-meals">
-                {SLOTS.map((s) => {
-                  const m = mealFor(home.menu, iso, s);
-                  const r = m?.recipe_id && home.recipes.find((x) => x.id === m.recipe_id);
-                  return (
-                    <div key={s} className={'board-meal' + (m ? '' : ' none')}>
-                      {r?.photo && <img src={r.photo} alt="" />}
-                      <span className="grow" style={{ minWidth: 0 }}>
-                        <span className="tiny muted" style={{ display: 'block' }}>{SLOT_LABEL[s]}</span>
-                        <b>{m ? m.meal : '–'}</b>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="board-events">
-                {ev.map((e) => (
-                  <div key={e.id} className="board-event">
-                    <span className="board-time">{e.time || 'Hele dag'}</span>
-                    <span className="grow">{e.title}</span>
+              <div className="board-items">
+                {dayTimeline(mealsFor(iso), evOn(iso)).map((x) => (x.kind === 'meal' ? (
+                  <div key={x.slot} className={'board-item meal' + (x.meal ? '' : ' none')}>
+                    <span className="board-time">{x.time} – {x.endTime}</span>
+                    <span className="board-what">{x.meal ? x.meal.meal : SLOT_LABEL[x.slot] + ': nog niets'}</span>
                   </div>
-                ))}
-                {events && !ev.length && <span className="tiny muted">Niets in de agenda</span>}
+                ) : (
+                  <div key={x.id} className="board-item event">
+                    <span className="board-time">{x.time ? (x.endTime ? `${x.time} – ${x.endTime}` : x.time) : 'Hele dag'}</span>
+                    <span className="board-what">{x.title}</span>
+                  </div>
+                )))}
               </div>
             </section>
           );
@@ -152,9 +141,10 @@ export default function Board({ home, onClose }) {
 
 function Rest({ now, home, events, photos, onWake }) {
   const day = pickDayForIdle(now);
-  const ev = (events || []).filter((e) => e.date === day.iso).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-  const upcoming = day.label === 'Vandaag' ? ev.filter((e) => !e.time || (e.endTime || e.time) >= nowTime(now)) : ev;
-  const meals = SLOTS.map((s) => ({ s, m: mealFor(home.menu, day.iso, s) })).filter((x) => x.m);
+  const ev = (events || []).filter((e) => e.date === day.iso);
+  const all = dayTimeline({ middag: mealFor(home.menu, day.iso, 'middag'), avond: mealFor(home.menu, day.iso, 'avond') }, ev)
+    .filter((x) => x.kind === 'event' || x.meal);
+  const upcoming = day.label === 'Vandaag' ? stillComing(all, nowTime(now)) : all;
   return (
     <div className="rest" onClick={onWake} role="button" tabIndex={0} aria-label="Tik om verder te gaan">
       <Slides photos={photos} />
@@ -164,16 +154,15 @@ function Rest({ now, home, events, photos, onWake }) {
           <div className="rest-clock">{nowTime(now)}</div>
           <div className="rest-date">{boardDayTitle(todayISO(now), todayISO(now), true)}</div>
         </div>
-        {(meals.length > 0 || upcoming.length > 0) && (
+        {upcoming.length > 0 && (
           <div className="rest-card">
             <div className="rest-card-title">{day.label}</div>
-            {meals.map(({ s, m }) => (
-              <div key={s} className="rest-line"><span className="rest-k">{SLOT_LABEL[s]}</span><b>{m.meal}</b></div>
-            ))}
-            {upcoming.slice(0, 4).map((e) => (
-              <div key={e.id} className="rest-line"><span className="rest-k">{e.time || 'Hele dag'}</span><span>{e.title}</span></div>
-            ))}
-            {upcoming.length > 4 && <div className="rest-line"><span className="rest-k" /><span>en nog {upcoming.length - 4}</span></div>}
+            {upcoming.slice(0, 5).map((x) => (x.kind === 'meal' ? (
+              <div key={x.slot} className="rest-line meal"><span className="rest-k">{x.time}</span><b>{x.meal.meal}</b></div>
+            ) : (
+              <div key={x.id} className="rest-line"><span className="rest-k">{x.time || 'Hele dag'}</span><span>{x.title}</span></div>
+            )))}
+            {upcoming.length > 5 && <div className="rest-line"><span className="rest-k" /><span>en nog {upcoming.length - 5}</span></div>}
           </div>
         )}
       </div>
