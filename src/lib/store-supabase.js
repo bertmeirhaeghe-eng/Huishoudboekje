@@ -1,5 +1,6 @@
 // Gedeelde gegevens via Supabase. De beveiliging zit in de database-regels (supabase/schema.sql).
 import { createClient } from '@supabase/supabase-js';
+import { PANTRY_FUNCTION } from './config.js';
 
 export function createSupabaseStore(url, anonKey) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -121,7 +122,7 @@ export function createSupabaseStore(url, anonKey) {
     // Foto van de voorraadkast laten bekijken door de AI (Supabase-functie "voorraad-foto").
     // Is die functie (nog) niet ingesteld, dan geven we 'geen-ai' terug zodat de app etiketten leest.
     async scanPantryPhoto(payload) {
-      const { data, error } = await sb.functions.invoke('voorraad-foto', { body: payload });
+      const { data, error } = await sb.functions.invoke(PANTRY_FUNCTION, { body: payload });
       if (!error) return data;
       const res = error.context;
       let msg = '';
