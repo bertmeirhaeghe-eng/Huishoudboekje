@@ -118,6 +118,20 @@ export function createSupabaseStore(url, anonKey) {
     async photoAlbumCount() { return Number(must(await sb.rpc('photo_album_count'))) || 0; },
     async albumPhotos() { return must(await sb.rpc('album_photos')) || []; },
 
+    // Foto van de voorraadkast laten bekijken door de AI (Supabase-functie "voorraad-foto").
+    // Is die functie (nog) niet ingesteld, dan geven we 'geen-ai' terug zodat de app etiketten leest.
+    async scanPantryPhoto(payload) {
+      const { data, error } = await sb.functions.invoke('voorraad-foto', { body: payload });
+      if (!error) return data;
+      const res = error.context;
+      let msg = '';
+      try { msg = (await res.json()).error || ''; } catch { /* geen JSON */ }
+      if (!res || res.status === 404 || res.status === 503 || msg === 'niet-ingesteld' || error.name === 'FunctionsFetchError' || error.name === 'FunctionsRelayError') {
+        const e = new Error('geen-ai'); e.code = 'geen-ai'; throw e;
+      }
+      throw new Error(msg || 'De foto kon niet bekeken worden.');
+    },
+
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
     subscribe(hid, fn, tables = ['entries', 'budgets']) {
       let ch = sb.channel('boekje-' + tables.join('-') + '-' + hid);
