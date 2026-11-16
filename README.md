@@ -63,6 +63,17 @@ Zo kan de app je afspraken alleen lezen. Nieuwe afspraken opent de app in Google
 
 Wil je dat de app ook zelf afspraken toevoegt? Vul dan een OAuth Client ID in bij `GOOGLE_CLIENT_ID` in `src/lib/config.js`. Het type is Web application, met als origin `https://bertmeirhaeghe-eng.github.io`.
 
+### Voorraad van een foto (AI) aanzetten
+
+In de voorraad kan je een foto van de kast nemen. Zonder extra instelling leest de app alleen de etiketten.
+Wil je dat Claude echt kijkt wat er staat (ook fruit, potten zonder etiket…), doe dan eenmalig:
+
+1. Maak een account op [console.anthropic.com](https://console.anthropic.com), zet er wat tegoed op (5 euro is ruim: een foto kost ongeveer 2 cent) en maak een API-sleutel.
+2. In Supabase: **Edge Functions → Secrets** → nieuw geheim `ANTHROPIC_API_KEY` met die sleutel.
+3. In Supabase: **Edge Functions → Deploy a new function → Via editor**, naam `voorraad-foto`, plak de inhoud van `supabase/functions/voorraad-foto/index.ts` en klik op Deploy.
+
+Alleen wie aangemeld is in het huishoudboekje kan de functie gebruiken; de sleutel staat nooit in de app zelf.
+
 ## Voor ontwikkelaars
 
 ```bash
