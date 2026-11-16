@@ -65,3 +65,9 @@ export function longToday(d = new Date()) {
   const s = `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+// De 12 maanden van het jaar waarin 'key' valt ("2026-05" -> "2026-01" ... "2026-12").
+export function yearMonths(key) {
+  const y = key.slice(0, 4);
+  return Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+}

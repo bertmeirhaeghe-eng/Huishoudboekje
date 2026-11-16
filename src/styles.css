@@ -455,3 +455,5 @@ details summary { cursor: pointer; }
 /* Voorraad van een foto: bezig met kijken */
 .meter > span.busy { animation: busy 1.4s ease-in-out infinite alternate; }
 @keyframes busy { from { transform: translateX(-60%); } to { transform: translateX(110%); } }
+.period-seg { margin-top: 6px; }
+.period-seg button { height: 40px; }
