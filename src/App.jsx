@@ -17,6 +17,9 @@ import Agenda, { saveEvent } from './components/Agenda.jsx';
 import TaxHelper from './components/TaxHelper.jsx';
 import BankImport from './components/BankImport.jsx';
 import { useHome } from './lib/useHome.js';
+import { budgetMonth } from './lib/stats.js';
+import { getEarlyDays, setEarlyDays as saveEarlyDays } from './lib/prefs.js';
+import { addDays } from './lib/kitchen.js';
 import { todayISO } from './lib/format.js';
 import { money } from './lib/format.js';
 import { category } from './lib/categories.js';
@@ -65,11 +68,15 @@ function Boekje({ household, onHouseholdChange }) {
   const memberNames = useMemo(() => household.members.map((m) => m.display_name).filter(Boolean), [household.members]);
   const toast = useCallback((text) => setParty({ text, id: Date.now() }), []);
 
+  const [earlyDays, setEarlyDaysState] = useState(getEarlyDays);
+  const setEarlyDays = (n) => { saveEarlyDays(n); setEarlyDaysState(n); };
+
   const months = useMemo(() => Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1)), [month]);
 
   const load = useCallback(async () => {
     try {
-      const from = monthRange(months[0]).from;
+      // Een paar dagen extra: vroege inkomsten van eind vorige maand tellen mee.
+      const from = addDays(monthRange(months[0]).from, -10);
       const to = monthRange(month).to;
       const [e, b] = await Promise.all([store.listEntries(household.id, from, to), store.listBudgets(household.id)]);
       setEntries(e);
@@ -89,7 +96,7 @@ function Boekje({ household, onHouseholdChange }) {
   }, [load]);
 
   const bookEntries = useMemo(() => entries.filter((e) => e.book === book), [entries, book]);
-  const monthEntries = useMemo(() => bookEntries.filter((e) => e.date.startsWith(month)), [bookEntries, month]);
+  const monthEntries = useMemo(() => bookEntries.filter((e) => budgetMonth(e, earlyDays) === month), [bookEntries, month, earlyDays]);
   const bookBudgets = useMemo(() => Object.fromEntries(budgets.filter((b) => b.book === book).map((b) => [b.category, b.amount_cents])), [budgets, book]);
 
   const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
@@ -119,7 +126,7 @@ function Boekje({ household, onHouseholdChange }) {
     for (const entry of list) await store.addEntry({ ...entry, household_id: household.id });
     const last = list[list.length - 1];
     if (last.book !== book) setBook(last.book);
-    if (!last.date.startsWith(month)) setMonth(last.date.slice(0, 7));
+    if (budgetMonth(last, earlyDays) !== month) setMonth(budgetMonth(last, earlyDays));
     await load();
     setDraft(null);
     go('overzicht');
@@ -144,11 +151,11 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'budgetten') {
     content = <Budgets {...common} budgets={bookBudgets} entries={monthEntries} onChange={load} />;
   } else if (screen === 'grafiek') {
-    content = <Chart {...common} entries={bookEntries} months={months} />;
+    content = <Chart {...common} entries={bookEntries} months={months} earlyDays={earlyDays} />;
   } else if (screen === 'meer') {
-    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} />;
+    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
-    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(date.slice(0, 7)); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
+    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(budgetMonth({ date, type: 'uit' })); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
   } else if (screen === 'privezaak') {
     content = <TaxHelper onBack={() => go('meer')} onBook={(d) => { setDraft({ type: 'uit', date: todayISO(), ...d }); go('toevoegen'); }} />;
   } else if (screen === 'lijst') {
@@ -166,6 +173,7 @@ function Boekje({ household, onHouseholdChange }) {
         entries={monthEntries}
         chartEntries={bookEntries}
         months={months}
+        earlyDays={earlyDays}
         budgets={bookBudgets}
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
         onOpenChart={() => go('grafiek')}

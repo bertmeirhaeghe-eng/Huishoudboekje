@@ -3,7 +3,7 @@ import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { category } from '../lib/categories.js';
 import { money, monthLabel, monthShortLabel, shiftMonth } from '../lib/format.js';
-import { perMonth, summarize } from '../lib/stats.js';
+import { budgetMonth, perMonth, summarize } from '../lib/stats.js';
 
 export function MonthSwitcher({ month, setMonth }) {
   return (
@@ -50,10 +50,11 @@ export function MonthBars({ series, compact = false }) {
   );
 }
 
-export default function ChartScreen({ book, month, setMonth, entries, months }) {
-  const series = useMemo(() => perMonth(entries, months), [entries, months]);
-  const monthEntries = useMemo(() => entries.filter((e) => e.date.startsWith(month)), [entries, month]);
+export default function ChartScreen({ book, month, setMonth, entries, months, earlyDays = 0 }) {
+  const series = useMemo(() => perMonth(entries, months, earlyDays), [entries, months, earlyDays]);
+  const monthEntries = useMemo(() => entries.filter((e) => budgetMonth(e, earlyDays) === month), [entries, month, earlyDays]);
   const sum = useMemo(() => summarize(monthEntries), [monthEntries]);
+  const income = Object.entries(monthEntries.filter((e) => e.type === 'in').reduce((a, e) => ({ ...a, [e.category]: (a[e.category] || 0) + e.amount_cents }), {})).sort((a, b) => b[1] - a[1]);
   const cats = Object.entries(sum.byCategory).sort((a, b) => b[1] - a[1]);
   const max = cats.length ? cats[0][1] : 1;
 
@@ -72,6 +73,16 @@ export default function ChartScreen({ book, month, setMonth, entries, months }) 
               <span className="muted">{money(v)} · {sum.expense ? Math.round((v / sum.expense) * 100) : 0}%</span>
             </div>
             <div className="meter"><span style={{ width: `${Math.round((v / max) * 100)}%` }} /></div>
+          </div>
+        ))}
+      </div>
+      <h2>Waar kwam het geld vandaan?</h2>
+      <div className="card stack" style={{ gap: 10 }} key={'in' + month + book}>
+        {income.length === 0 && <span className="small muted">Nog geen inkomsten deze maand.</span>}
+        {income.map(([id, v]) => (
+          <div key={id} className="spread small">
+            <span className="row" style={{ gap: 10 }}><CatIcon id={id} size={18} /><span className="bold">{category(id).name}</span></span>
+            <span className="amt in">+ {money(v)}</span>
           </div>
         ))}
       </div>

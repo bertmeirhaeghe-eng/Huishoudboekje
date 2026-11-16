@@ -7,7 +7,7 @@ import { store } from '../lib/store.js';
 import * as gcal from '../lib/gcal.js';
 import { forgetCalendar } from './Agenda.jsx';
 
-export default function Settings({ household, onChange, onOpenTax, onOpenImport }) {
+export default function Settings({ household, onChange, onOpenTax, onOpenImport, earlyDays = 3, setEarlyDays }) {
   const [msg, setMsg] = useState('');
   const isOwner = household.role === 'eigenaar';
 
@@ -69,6 +69,19 @@ export default function Settings({ household, onChange, onOpenTax, onOpenImport 
           <span className="grow" style={{ textAlign: 'left' }}><b style={{ display: 'block' }}>Bankafschrift importeren</b><span className="tiny muted">CSV van Crelan of een andere bank</span></span>
           <Icon name="next" size={18} />
         </button>
+      )}
+
+      {setEarlyDays && (
+        <section className="card stack" style={{ gap: 10 }}>
+          <h2>Vroege inkomsten</h2>
+          <span className="small muted">Storten jullie je maandelijkse bijdrage al een paar dagen voor de eerste? Een inkomst in de laatste {earlyDays || 'X'} dagen van de maand telt dan mee voor de volgende maand.</span>
+          <div className="seg" role="group" aria-label="Aantal dagen">
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <button key={n} aria-pressed={earlyDays === n} onClick={() => setEarlyDays(n)}>{n === 0 ? 'Uit' : n}</button>
+            ))}
+          </div>
+          <span className="tiny muted">{earlyDays ? `Bv. een storting op 30 oktober telt voor november.` : 'Elke inkomst telt voor de maand waarin ze binnenkomt.'} Uitgaven blijven altijd in hun eigen maand.</span>
+        </section>
       )}
 
       <section className="card stack" style={{ gap: 10 }}>

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAmount, shiftMonth, monthRange, dayLabel } from '../src/lib/format.js';
-import { summarize, budgetRows, perMonth, groupByDate, toCSV } from '../src/lib/stats.js';
+import { summarize, budgetRows, perMonth, groupByDate, toCSV, budgetMonth } from '../src/lib/stats.js';
 import { pressKey } from '../src/lib/keypad.js';
 
 test('parseAmount', () => {
@@ -64,4 +64,20 @@ test('klavier', () => {
   assert.equal(pressKey('25,50', '⌫'), '25,5');
   assert.equal(pressKey('5', '⌫'), '0');
   assert.equal(pressKey('5,', ','), '5,');
+});
+
+test('vroege inkomsten tellen voor de volgende maand', () => {
+  assert.equal(budgetMonth({ date: '2026-10-30', type: 'in' }, 3), '2026-11');
+  assert.equal(budgetMonth({ date: '2026-10-29', type: 'in' }, 3), '2026-11');
+  assert.equal(budgetMonth({ date: '2026-10-28', type: 'in' }, 3), '2026-10');
+  assert.equal(budgetMonth({ date: '2026-10-31', type: 'uit' }, 3), '2026-10');
+  assert.equal(budgetMonth({ date: '2026-10-30', type: 'in' }, 0), '2026-10');
+  assert.equal(budgetMonth({ date: '2026-12-30', type: 'in' }, 3), '2027-01');
+  assert.equal(budgetMonth({ date: '2026-02-27', type: 'in' }, 2), '2026-03');
+  const pm = perMonth([
+    { date: '2026-10-30', type: 'in', amount_cents: 170000 },
+    { date: '2026-10-15', type: 'uit', amount_cents: 5000 },
+  ], ['2026-10', '2026-11'], 3);
+  assert.deepEqual(pm.map((m) => m.income), [0, 170000]);
+  assert.deepEqual(pm.map((m) => m.expense), [5000, 0]);
 });
