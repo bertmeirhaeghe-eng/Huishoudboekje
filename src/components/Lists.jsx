@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { BasketIllustration } from './Illustrations.jsx';
 import { AISLE_ORDER, aisle } from '../lib/kitchen.js';
 import { splitItems } from '../lib/commands.js';
+
+const PantryPhoto = lazy(() => import('./PantryPhoto.jsx'));
 
 const PLACES = [
   { id: 'kast', name: 'Kast' },
@@ -138,6 +140,9 @@ function Pantry({ home, toast }) {
   const { pantry, act } = home;
   const [place, setPlace] = useState('kast');
   const [edit, setEdit] = useState(null);
+  const [photo, setPhoto] = useState(null);
+  const cam = useRef(null);
+  const gal = useRef(null);
   const low = pantry.filter((p) => p.status !== 'ok');
 
   async function add(text) {
@@ -158,13 +163,19 @@ function Pantry({ home, toast }) {
         {PLACES.map((p) => <button key={p.id} aria-pressed={place === p.id} onClick={() => setPlace(p.id)}>{p.name}</button>)}
       </div>
       <AddBar placeholder={`Iets in de ${PLACES.find((p) => p.id === place).name.toLowerCase()} zetten`} label="Iets in de voorraad zetten" onAdd={add} />
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn grow" onClick={() => cam.current?.click()}><Icon name="camera" /> Foto van de kast</button>
+        <button className="btn ghost" onClick={() => gal.current?.click()} style={{ padding: '0 14px' }}>Uit galerij</button>
+      </div>
+      <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto(f); e.target.value = ''; }} />
+      <input ref={gal} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhoto(f); e.target.value = ''; }} />
       <div className="small muted">Tik op een product om aan te duiden of het bijna op of op is. Dan komt het vanzelf op de boodschappenlijst.</div>
       {low.length > 0 && <div className="notice">{low.length === 1 ? '1 product is' : `${low.length} producten zijn`} bijna op of op.</div>}
       {pantry.length === 0 && (
         <div className="card empty">
           <BasketIllustration />
           <b>Nog niets in de voorraad</b>
-          <span className="small muted">Zet erin wat je meestal in huis hebt: pasta, rijst, melk, eieren… Dan zie je bij elk recept wat je nog moet kopen.</span>
+          <span className="small muted">Zet erin wat je meestal in huis hebt: pasta, rijst, melk, eieren… Of neem een foto van de kast, dan zoek ik het zelf uit. Zo zie je bij elk recept wat je nog moet kopen.</span>
         </div>
       )}
       <div className="stack stagger" style={{ gap: 12 }}>
@@ -188,6 +199,7 @@ function Pantry({ home, toast }) {
         })}
       </div>
       {pantry.length > 0 && <button className="btn ghost" onClick={() => setEdit('kies')}><Icon name="edit" /> Voorraad aanpassen of verwijderen</button>}
+      {photo && <Suspense fallback={null}><PantryPhoto file={photo} home={home} place={place} toast={toast} onClose={() => setPhoto(null)} /></Suspense>}
       {edit && <PantryEdit home={home} item={edit === 'kies' ? null : edit} onClose={() => setEdit(null)} />}
     </div>
   );

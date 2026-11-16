@@ -451,3 +451,7 @@ details summary { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .slide.on .slide-img { animation: none; }
 }
+
+/* Voorraad van een foto: bezig met kijken */
+.meter > span.busy { animation: busy 1.4s ease-in-out infinite alternate; }
+@keyframes busy { from { transform: translateX(-60%); } to { transform: translateX(110%); } }

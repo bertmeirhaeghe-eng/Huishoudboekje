@@ -116,6 +116,7 @@ export const demoStore = {
   async calendarIcs() { try { return localStorage.getItem('boekje-demo-ics'); } catch { return null; } },
   async setPhotoAlbums() { throw new Error('Foto-albums koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
   async photoAlbumCount() { return 0; },
+  async scanPantryPhoto() { const e = new Error('geen-ai'); e.code = 'geen-ai'; throw e; },
   async albumPhotos() {
     // In de proefmodus kan je zelf foto's klaarzetten (handig om de ruststand te proberen).
     try { return JSON.parse(localStorage.getItem('boekje-demo-fotos') || '[]'); } catch { return []; }

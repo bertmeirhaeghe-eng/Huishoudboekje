@@ -122,6 +122,27 @@ export function useHome(hid) {
         return added;
       },
 
+      // Van een foto: nieuwe producten erbij, bestaande op "genoeg" of "bijna op" zetten.
+      // Wat bijna op is, komt ook op de boodschappenlijst.
+      async applyPhotoScan(rows) {
+        const now = new Date().toISOString();
+        const fresh = rows.filter((r) => !r.existing);
+        const added = fresh.length ? await this.addPantry(fresh.map((r) => ({ name: r.name, place: r.place, status: r.status }))) : 0;
+        let updated = 0;
+        for (const r of rows.filter((x) => x.existing)) {
+          const patch = {};
+          if (r.existing.status !== r.status) patch.status = r.status;
+          if (r.existing.place !== r.place) patch.place = r.place;
+          if (r.existing.name !== r.name && r.name.trim()) patch.name = r.name.trim().slice(0, 80);
+          if (!Object.keys(patch).length) continue;
+          await run((d) => ({ pantry: d.pantry.map((p) => (p.id === r.existing.id ? { ...p, ...patch } : p)) }), () => store.updateRow('pantry_items', r.existing.id, { ...patch, updated_at: now }));
+          updated++;
+        }
+        const low = rows.filter((r) => r.status === 'bijna');
+        const listed = low.length ? await addShopping(low.map((r) => ({ name: r.name })), 'Voorraad') : 0;
+        return { added, updated, listed };
+      },
+
       updatePantry(id, patch) {
         return run((d) => ({ pantry: d.pantry.map((p) => (p.id === id ? { ...p, ...patch } : p)) }), () => store.updateRow('pantry_items', id, patch));
       },
