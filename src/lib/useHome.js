@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { store } from './store.js';
-import { findInPantry, sameThing } from './kitchen.js';
+import { findInPantry, sameThing, slotOf } from './kitchen.js';
 
 const TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
 const EMPTY = { shopping: [], pantry: [], recipes: [], menu: [] };
@@ -148,17 +148,17 @@ export function useHome(hid) {
           (d) => ({ recipes: d.recipes.filter((r) => r.id !== id), menu: d.menu.map((m) => (m.recipe_id === id ? { ...m, recipe_id: null } : m)) }),
           async () => {
             // In de proefmodus is er geen database die dit voor ons doet.
-            if (store.mode === 'demo') for (const m of dataRef.current.menu.filter((x) => x.recipe_id === id)) await store.setMenu(hid, m.date, m.meal, null);
+            if (store.mode === 'demo') for (const m of dataRef.current.menu.filter((x) => x.recipe_id === id)) await store.setMenu(hid, m.date, m.meal, null, slotOf(m));
             await store.deleteRows('recipes', [id]);
           },
         );
       },
 
-      setMenu(date, meal, recipeId = null) {
+      setMenu(date, meal, recipeId = null, slot = 'avond') {
         const m = (meal || '').trim().slice(0, 120);
         return run(
-          (d) => ({ menu: [...d.menu.filter((x) => x.date !== date), ...(m ? [{ household_id: hid, date, meal: m, recipe_id: recipeId }] : [])] }),
-          () => store.setMenu(hid, date, m, recipeId),
+          (d) => ({ menu: [...d.menu.filter((x) => !(x.date === date && slotOf(x) === slot)), ...(m ? [{ household_id: hid, date, slot, meal: m, recipe_id: recipeId }] : [])] }),
+          () => store.setMenu(hid, date, m, recipeId, slot),
         );
       },
     };

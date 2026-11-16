@@ -156,6 +156,19 @@ create table if not exists public.menu_days (
   primary key (household_id, date)
 );
 
+-- Middag en avond: een tweede maaltijd per dag. Bestaande maaltijden worden avondeten.
+alter table public.menu_days add column if not exists slot text not null default 'avond';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'menu_days_slot_check') then
+    alter table public.menu_days add constraint menu_days_slot_check check (slot in ('middag', 'avond'));
+  end if;
+  if (select count(*) from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
+      where i.indrelid = 'public.menu_days'::regclass and i.indisprimary) = 2 then
+    alter table public.menu_days drop constraint menu_days_pkey;
+    alter table public.menu_days add primary key (household_id, date, slot);
+  end if;
+end $$;
+
 alter table public.shopping_items enable row level security;
 alter table public.pantry_items enable row level security;
 alter table public.recipes enable row level security;
@@ -229,6 +242,83 @@ revoke execute on function public.calendar_ics() from public, anon;
 grant execute on function public.set_calendar_url(text) to authenticated;
 grant execute on function public.has_calendar() to authenticated;
 grant execute on function public.calendar_ics() to authenticated;
+
+-- ───────────── Foto's voor de ruststand (gedeelde Google Foto's-albums) ─────────────
+-- Google laat apps sinds 2025 niet meer vrij in je albums lezen. Een gedeeld album (link)
+-- kan wel: de database haalt de pagina op en neemt de fotolinks eruit.
+
+alter table public.household_secrets add column if not exists photo_albums text[] not null default '{}';
+
+create or replace function public.set_photo_albums(p_urls text[]) returns void
+language plpgsql security definer set search_path = public as $$
+declare hid uuid; u text; clean text[] := '{}';
+begin
+  select household_id into hid from household_members where user_id = auth.uid() and role = 'eigenaar' limit 1;
+  if hid is null then raise exception 'photo albums: only the owner'; end if;
+  foreach u in array coalesce(p_urls, '{}') loop
+    u := trim(u);
+    continue when u = '';
+    if u !~ '^https://(photos\.app\.goo\.gl/[A-Za-z0-9]+|photos\.google\.com/(u/\d+/)?share/[A-Za-z0-9_-]+(\?key=[A-Za-z0-9_-]+)?)/?$' then
+      raise exception 'photo albums: invalid link';
+    end if;
+    if not u = any(clean) then clean := clean || u; end if;
+  end loop;
+  if array_length(clean, 1) > 10 then raise exception 'photo albums: invalid link'; end if;
+  insert into household_secrets (household_id, photo_albums) values (hid, clean)
+    on conflict (household_id) do update set photo_albums = excluded.photo_albums;
+end;
+$$;
+
+create or replace function public.photo_album_count() returns integer
+language sql stable security definer set search_path = public as $$
+  select coalesce(max(cardinality(s.photo_albums)), 0)::int from household_secrets s
+    join household_members m on m.household_id = s.household_id where m.user_id = auth.uid();
+$$;
+
+create or replace function public.album_photos() returns text[]
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  albums text[]; a text; u text; loc text; r extensions.http_response; out text[] := '{}'; n int;
+  hdrs extensions.http_header[] := array[
+    ('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36')::extensions.http_header,
+    ('Accept-Language', 'nl-BE,nl;q=0.9')::extensions.http_header,
+    ('Cookie', 'CONSENT=YES+cb; SOCS=CAI')::extensions.http_header
+  ];
+begin
+  select s.photo_albums into albums from household_secrets s join household_members m on m.household_id = s.household_id
+    where m.user_id = auth.uid() limit 1;
+  if albums is null or cardinality(albums) = 0 then return '{}'; end if;
+  begin perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '20000'); exception when others then null; end;
+  foreach a in array albums loop
+    begin
+      u := a;
+      -- Korte links (photos.app.goo.gl) sturen door naar het album zelf.
+      for n in 1..5 loop
+        r := extensions.http(('GET', u, hdrs, null, null)::extensions.http_request);
+        exit when r.status not in (301, 302, 303, 307, 308);
+        select h.value into loc from unnest(r.headers) h where lower(h.field) = 'location' limit 1;
+        exit when loc is null;
+        u := case when loc like 'http%' then loc else regexp_replace(u, '^(https://[^/]+).*$', '\1') || loc end;
+      end loop;
+      if r.status = 200 then
+        out := out || array(
+          select distinct m[1] from regexp_matches(r.content, '\["(https://lh3\.googleusercontent\.com/pw/[A-Za-z0-9_-]+)",\d+,\d+', 'g') as m
+        );
+      end if;
+    exception when others then
+      null; -- een album dat niet lukt, slaan we over
+    end;
+  end loop;
+  return array(select distinct x from unnest(out) x);
+end;
+$$;
+
+revoke execute on function public.set_photo_albums(text[]) from public, anon;
+revoke execute on function public.photo_album_count() from public, anon;
+revoke execute on function public.album_photos() from public, anon;
+grant execute on function public.set_photo_albums(text[]) to authenticated;
+grant execute on function public.photo_album_count() to authenticated;
+grant execute on function public.album_photos() to authenticated;
 
 -- ───────────── Gezin aanmaken en aansluiten ─────────────
 

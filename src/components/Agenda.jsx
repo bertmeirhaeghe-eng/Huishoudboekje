@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
 import { CalendarIllustration } from './Illustrations.jsx';
 import * as gcal from '../lib/gcal.js';
-import { addDays } from '../lib/kitchen.js';
+import { addDays, mealsOn, SLOT_LABEL, slotOf } from '../lib/kitchen.js';
 import { dayLabel, todayISO } from '../lib/format.js';
 import { eventsBetween } from '../lib/ics.js';
 import { store } from '../lib/store.js';
@@ -12,7 +12,7 @@ const SPAN = 28;
 // De iCal-agenda even onthouden, zodat wisselen tussen schermen niet telkens opnieuw laadt.
 let icsCache = null; // { text, at }
 export function forgetCalendar() { icsCache = null; }
-async function loadIcs(force = false) {
+export async function loadIcs(force = false) {
   if (!force && icsCache && Date.now() - icsCache.at < 5 * 60000) return icsCache.text;
   const text = await store.calendarIcs();
   icsCache = { text, at: Date.now() };
@@ -84,8 +84,8 @@ export default function Agenda({ home, members, toast, isOwner, onOpenSettings }
 
   const days = Array.from({ length: SPAN }, (_, i) => addDays(today, i));
   const byDay = days
-    .map((iso) => ({ iso, ev: (events || []).filter((e) => e.date === iso), meal: home.menu.find((m) => m.date === iso) }))
-    .filter((x, i) => i < 7 || x.ev.length || x.meal);
+    .map((iso) => ({ iso, ev: (events || []).filter((e) => e.date === iso), meals: mealsOn(home.menu, iso) }))
+    .filter((x, i) => i < 7 || x.ev.length || x.meals.length);
 
   return (
     <div className="stack" style={{ maxWidth: 720 }}>
@@ -129,7 +129,7 @@ export default function Agenda({ home, members, toast, isOwner, onOpenSettings }
 
       {(token || ics || home.menu.length > 0) && (
         <div className="stack stagger" style={{ gap: 10 }}>
-          {byDay.map(({ iso, ev, meal }) => (
+          {byDay.map(({ iso, ev, meals }) => (
             <div key={iso} className={'agenda-day' + (iso === today ? ' today' : '')}>
               <span className="tiny bold muted" style={{ paddingLeft: 4 }}>{dayLabel(iso, today) === 'Vandaag' ? 'Vandaag' : cap(dayLabel(iso, today))}</span>
               <div className="card list">
@@ -139,13 +139,13 @@ export default function Agenda({ home, members, toast, isOwner, onOpenSettings }
                     <span className="grow bold">{e.title}</span>
                   </button>
                 ))}
-                {meal && (
-                  <div className="entry meal-line">
+                {meals.map((meal) => (
+                  <div key={slotOf(meal)} className="entry meal-line">
                     <span className="time"><Icon name="pot" size={18} /></span>
-                    <span className="grow">{meal.meal}</span>
+                    <span className="grow">{meals.length > 1 || slotOf(meal) === 'middag' ? <span className="tiny muted">{SLOT_LABEL[slotOf(meal)]} </span> : null}{meal.meal}</span>
                   </div>
-                )}
-                {!ev.length && !meal && <div className="entry tiny muted">{token || ics ? 'Niets gepland' : ''}</div>}
+                ))}
+                {!ev.length && !meals.length && <div className="entry tiny muted">{token || ics ? 'Niets gepland' : ''}</div>}
               </div>
             </div>
           ))}

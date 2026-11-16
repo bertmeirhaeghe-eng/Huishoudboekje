@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCommand, findFutureDate, findTime } from '../src/lib/commands.js';
-import { sameThing, parseIngredient, parseRecipeText, checkIngredients, aisle, mondayOf, shoppingForWeek, weekDays } from '../src/lib/kitchen.js';
+import { sameThing, parseIngredient, parseRecipeText, checkIngredients, aisle, mondayOf, shoppingForWeek, weekDays, mealFor, mealsOn } from '../src/lib/kitchen.js';
 import { adviseFor } from '../src/lib/advice.js';
 
 const T = '2026-11-15'; // zondag
@@ -23,10 +23,22 @@ test('iets is op', () => {
 });
 
 test('weekmenu', () => {
-  assert.deepEqual(cmd('Maandag eten we spaghetti'), { kind: 'menu', date: '2026-11-16', meal: 'Spaghetti bolognese', recipe_id: 'r1', text: 'Maandag eten we spaghetti' });
+  assert.deepEqual(cmd('Maandag eten we spaghetti'), { kind: 'menu', date: '2026-11-16', slot: 'avond', meal: 'Spaghetti bolognese', recipe_id: 'r1', text: 'Maandag eten we spaghetti' });
   assert.equal(cmd('Zet lasagne op het menu voor vrijdag').date, '2026-11-20');
   assert.equal(cmd('Morgen soep op het menu').meal, 'Soep');
   assert.equal(cmd('Vanavond eten we frietjes').date, T);
+  const m = cmd("Woensdag 's middags eten we soep");
+  assert.deepEqual([m.slot, m.meal, m.date], ['middag', 'Soep', '2026-11-18']);
+  assert.equal(cmd('Zet croques op het menu voor zaterdag als middageten').slot, 'middag');
+  assert.equal(cmd('Morgen lunch: pasta salade op het menu').meal, 'Pasta salade');
+  assert.equal(cmd('Vrijdag eten we vis').slot, 'avond');
+});
+
+test('weekmenu met middag en avond', () => {
+  const menu = [{ date: '2026-11-18', meal: 'Soep', slot: 'middag' }, { date: '2026-11-18', meal: 'Stoofvlees' }];
+  assert.deepEqual(mealsOn(menu, '2026-11-18').map((m) => m.meal), ['Soep', 'Stoofvlees']);
+  assert.equal(mealFor(menu, '2026-11-18', 'avond').meal, 'Stoofvlees');
+  assert.equal(mealFor(menu, '2026-11-19', 'middag'), null);
 });
 
 test('agenda', () => {

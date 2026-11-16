@@ -14,3 +14,11 @@ export function getEarlyDays() {
 export function setEarlyDays(n) {
   try { localStorage.setItem(EARLY_KEY, String(n)); } catch {}
 }
+
+// Dit toestel (bv. de tablet in de keuken) opent meteen het weekbord.
+const BOARD_KEY = 'boekje-start-bord';
+export function startsOnBoard() {
+  if (typeof location !== 'undefined' && /(^#|[?&])bord\b/.test(location.hash + location.search)) return true;
+  try { return localStorage.getItem(BOARD_KEY) === '1'; } catch { return false; }
+}
+export function setStartsOnBoard(on) { try { if (on) localStorage.setItem(BOARD_KEY, '1'); else localStorage.removeItem(BOARD_KEY); } catch {} }

@@ -92,9 +92,19 @@ export function createSupabaseStore(url, anonKey) {
       check(table);
       if (ids.length) must(await sb.from(table).delete().in('id', ids));
     },
-    async setMenu(hid, date, meal, recipeId = null) {
-      if (meal) must(await sb.from('menu_days').upsert({ household_id: hid, date, meal, recipe_id: recipeId }));
-      else must(await sb.from('menu_days').delete().eq('household_id', hid).eq('date', date));
+    async setMenu(hid, date, meal, recipeId = null, slot = 'avond') {
+      const t = sb.from('menu_days');
+      let res = meal
+        ? await t.upsert({ household_id: hid, date, slot, meal, recipe_id: recipeId }, { onConflict: 'household_id,date,slot' })
+        : await t.delete().eq('household_id', hid).eq('date', date).eq('slot', slot);
+      // Database nog zonder middag/avond? Dan werkt het avondeten zoals vroeger.
+      if (res.error && /slot|no unique or exclusion constraint/i.test(res.error.message)) {
+        if (slot !== 'avond') throw new Error('Voor middag en avond moet je eerst de nieuwe schema.sql uitvoeren in Supabase.');
+        res = meal
+          ? await sb.from('menu_days').upsert({ household_id: hid, date, meal, recipe_id: recipeId })
+          : await sb.from('menu_days').delete().eq('household_id', hid).eq('date', date);
+      }
+      must(res);
     },
 
     // Google Agenda via het geheime iCal-adres. Het adres blijft in de database;
@@ -102,6 +112,11 @@ export function createSupabaseStore(url, anonKey) {
     async setCalendarUrl(url) { must(await sb.rpc('set_calendar_url', { p_url: url })); },
     async hasCalendar() { return Boolean(must(await sb.rpc('has_calendar'))); },
     async calendarIcs() { return must(await sb.rpc('calendar_ics')); },
+
+    // Gedeelde Google Foto's-albums voor de ruststand van het weekbord.
+    async setPhotoAlbums(urls) { must(await sb.rpc('set_photo_albums', { p_urls: urls })); },
+    async photoAlbumCount() { return Number(must(await sb.rpc('photo_album_count'))) || 0; },
+    async albumPhotos() { return must(await sb.rpc('album_photos')) || []; },
 
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
     subscribe(hid, fn, tables = ['entries', 'budgets']) {
@@ -127,6 +142,9 @@ function translate(msg) {
   if (/household_secrets_ical_url_check/i.test(m)) return 'Dat is geen geheim iCal-adres van Google Agenda. Het begint met https://calendar.google.com/calendar/ical/ en eindigt op .ics.';
   if (/only the owner can set the calendar/i.test(m)) return 'Alleen de eigenaar van het gezin kan de agenda koppelen.';
   if (/calendar fetch failed/i.test(m)) return 'Google Agenda gaf geen antwoord. Klopt het geheime adres nog?';
+  if (/(album_photos|photo_album_count|set_photo_albums)/i.test(m) && /does not exist|Could not find the function/i.test(m)) return 'De database mist nog de foto-functies. Voer schema.sql opnieuw uit in Supabase.';
+  if (/photo albums: only the owner/i.test(m)) return 'Alleen de eigenaar van het gezin kan de foto-albums instellen.';
+  if (/photo albums: invalid link/i.test(m)) return 'Dat is geen link naar een gedeeld Google Foto\'s-album. Die begint met https://photos.app.goo.gl/ of https://photos.google.com/share/.';
   if (/function .*(calendar_ics|has_calendar|set_calendar_url).* does not exist|Could not find the function/i.test(m)) return 'De database mist nog de agenda-functies. Voer schema.sql opnieuw uit in Supabase.';
   if (/invite code/i.test(m)) return 'Die uitnodigingscode bestaat niet.';
   if (/relation .* does not exist|Could not find the table/i.test(m)) return 'De database mist nog de nieuwe tabellen. Voer schema.sql opnieuw uit in Supabase.';

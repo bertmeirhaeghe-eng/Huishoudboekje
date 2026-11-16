@@ -129,10 +129,11 @@ export function parseCommand(raw, { today = todayISO(), recipes = [], members = 
   if (!euro && MENU_RE.test(lower) && !has(lower, 'agenda|afspraak')) {
     const d = findFutureDate(lower, today);
     let meal = cutOut(lower, d.match);
-    meal = tidy(meal.replace(new RegExp(W("zet|zetten|voeg|toe|op|het|de|ons|onze|(?:week)?menu|voor|eten|koken|maken|bakken|we|wij|gaan|er|is|wat|dan|graag|'s avonds|als avondeten|avondeten|vanavond|deze week"), 'g'), ' '));
+    const slot = has(lower, "'s middags|s middags|middag|middageten|als middageten|lunch|vanmiddag|over de middag") ? 'middag' : 'avond';
+    meal = tidy(meal.replace(new RegExp(W("zet|zetten|voeg|toe|op|het|de|ons|onze|(?:week)?menu|voor|eten|koken|maken|bakken|we|wij|gaan|er|is|wat|dan|graag|als|'s avonds|s avonds|avondeten|vanavond|'s middags|s middags|over de middag|middageten|middag|lunch|vanmiddag|'s|deze week"), 'g'), ' '));
     if (meal) {
       const recipe = recipes.find((r) => r.title.toLowerCase() === meal) || recipes.find((r) => r.title.toLowerCase().includes(meal) || meal.includes(r.title.toLowerCase())) || recipes.find((r) => sameThing(r.title, meal));
-      return { kind: 'menu', date: d.date || today, meal: recipe ? recipe.title : cap(meal), recipe_id: recipe?.id || null, text };
+      return { kind: 'menu', date: d.date || today, slot, meal: recipe ? recipe.title : cap(meal), recipe_id: recipe?.id || null, text };
     }
   }
 
