@@ -26,11 +26,23 @@ export function budgetRows(byCategory, budgets) {
     .sort((a, b) => (b.max > 0) - (a.max > 0) || b.used - a.used);
 }
 
+// Voor welke maand telt een boeking? Een inkomst in de laatste 'earlyDays' dagen van de maand
+// (bv. de maandelijkse bijdrage die al op 30 oktober binnenkomt) telt mee voor de volgende maand.
+export function budgetMonth(e, earlyDays = 0) {
+  const m = e.date.slice(0, 7);
+  if (e.type !== 'in' || !earlyDays) return m;
+  const [y, mo, d] = e.date.split('-').map(Number);
+  const last = new Date(y, mo, 0).getDate();
+  if (d <= last - earlyDays) return m;
+  const next = new Date(y, mo, 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // Groepeer per maand ("2026-11") voor de grafiek.
-export function perMonth(entries, months) {
+export function perMonth(entries, months, earlyDays = 0) {
   const out = Object.fromEntries(months.map((m) => [m, { month: m, income: 0, expense: 0 }]));
   for (const e of entries) {
-    const m = e.date.slice(0, 7);
+    const m = budgetMonth(e, earlyDays);
     if (!out[m]) continue;
     if (e.type === 'in') out[m].income += e.amount_cents;
     else out[m].expense += e.amount_cents;

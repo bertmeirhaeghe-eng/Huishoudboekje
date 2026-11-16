@@ -5,15 +5,16 @@ import { CoinStack, PiggyIllustration } from './Illustrations.jsx';
 import { useCountUp } from '../lib/anim.js';
 import { MonthBars, MonthSwitcher } from './Chart.jsx';
 import { category } from '../lib/categories.js';
-import { dayLabel, longToday, money } from '../lib/format.js';
-import { budgetRows, groupByDate, perMonth, summarize } from '../lib/stats.js';
+import { dayLabel, longToday, monthLabel, money } from '../lib/format.js';
+import { budgetMonth, budgetRows, groupByDate, perMonth, summarize } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, entries, chartEntries, months, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
+  const [kind, setKind] = useState('uit');
   const sum = useMemo(() => summarize(entries), [entries]);
   const rows = useMemo(() => budgetRows(sum.byCategory, budgets).slice(0, 4), [sum, budgets]);
-  const groups = useMemo(() => groupByDate(entries), [entries]);
-  const series = useMemo(() => perMonth(chartEntries, months), [chartEntries, months]);
+  const groups = useMemo(() => groupByDate(entries.filter((e) => e.type === kind)), [entries, kind]);
+  const series = useMemo(() => perMonth(chartEntries, months, earlyDays), [chartEntries, months, earlyDays]);
   const names = Object.fromEntries(household.members.map((m) => [m.user_id, m.display_name]));
 
   const zaak = book === 'zaak';
@@ -109,14 +110,21 @@ export default function Overview({ household, isOwner, book, setBook, month, set
 
         <section className="stack" style={{ gap: 10 }}>
           <h2>Boekingen</h2>
-          {groups.length === 0 && (
+          <div className="seg" role="group" aria-label="Soort boekingen">
+            <button aria-pressed={kind === 'uit'} onClick={() => setKind('uit')}>Uitgaven · {money(sum.expense, { round: true })}</button>
+            <button aria-pressed={kind === 'in'} onClick={() => setKind('in')}>Inkomsten · {money(sum.income, { round: true })}</button>
+          </div>
+          {groups.length === 0 && entries.length > 0 && (
+            <div className="card small muted">{kind === 'in' ? 'Nog geen inkomsten deze maand.' : 'Nog geen uitgaven deze maand.'}</div>
+          )}
+          {entries.length === 0 && (
             <div className="card empty">
               <PiggyIllustration />
               <b>Nog niets deze maand</b>
               <span className="small muted">Tik op de microfoon en zeg bv. “25 euro tanken”, of tik op de plus.</span>
             </div>
           )}
-          <div className="stack stagger" style={{ gap: 10 }} key={book + month}>
+          <div className="stack stagger" style={{ gap: 10 }} key={book + month + kind}>
           {groups.map((g) => (
             <div key={g.date} className="stack" style={{ gap: 6 }}>
               <span className="tiny bold muted" style={{ paddingLeft: 4 }}>{dayLabel(g.date)}</span>
@@ -129,6 +137,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
                       <span className="grow">
                         <span style={{ display: 'block', fontWeight: 600 }}>{e.note || c.name}</span>
                         <span className="tiny muted">{c.name}{names[e.created_by] ? ` · ${names[e.created_by]}` : ''}</span>
+                        {budgetMonth(e, earlyDays) !== e.date.slice(0, 7) && <span className="tiny" style={{ display: 'block', color: 'var(--green)', fontWeight: 700 }}>telt voor {monthLabel(budgetMonth(e, earlyDays)).split(' ')[0]}</span>}
                       </span>
                       <span className={'amt' + (e.type === 'in' ? ' in' : '')}>{e.type === 'in' ? '+ ' : '− '}{money(e.amount_cents)}</span>
                     </button>
