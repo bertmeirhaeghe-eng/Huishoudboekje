@@ -39,7 +39,7 @@ export default function PantryPhoto({ file, home, place: startPlace, onClose, to
         if (e.code !== 'geen-ai') { if (!stop) { setError(e.message); setStep('fout'); } return; }
         // Geen AI ingesteld: dan lezen we de etiketten op het toestel zelf.
         if (stop) return;
-        setLabelsOnly(true);
+        setLabelsOnly(e.reden || true);
         setStep('lezen');
         try {
           const { readText } = await import('../lib/ocr.js');
@@ -120,7 +120,7 @@ export default function PantryPhoto({ file, home, place: startPlace, onClose, to
 
         {step === 'nakijken' && (
           <>
-            {labelsOnly && <div className="notice">Ik heb alleen de etiketten gelezen, dus ik mis wellicht wat. De slimme herkenning met AI staat nog niet aan.</div>}
+            {labelsOnly && <div className="notice">Ik heb alleen de etiketten gelezen, dus ik mis wellicht wat. De slimme herkenning met AI staat nog niet aan.{typeof labelsOnly === 'string' && <><br /><b>Reden:</b> {labelsOnly}</>}</div>}
             <div className="seg small-seg" role="group" aria-label="Waar is de foto genomen?">
               {PLACES.map((p) => <button key={p.id} aria-pressed={place === p.id} onClick={() => choosePlace(p.id)}>{p.name}</button>)}
             </div>

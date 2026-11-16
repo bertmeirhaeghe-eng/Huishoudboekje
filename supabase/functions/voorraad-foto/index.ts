@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   const { data: who } = await sb.auth.getUser(auth.replace(/^Bearer\s+/i, ''));
   if (!who?.user) return json({ error: 'Meld je eerst aan.' }, 401);
 
-  if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'niet-ingesteld' }, 503);
+  if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'niet-ingesteld', reden: 'De sleutel ANTHROPIC_API_KEY staat nog niet in Supabase.' }, 503);
 
   let body: { image?: string; mediaType?: string; known?: string[] };
   try { body = await req.json(); } catch { return json({ error: 'Geen foto ontvangen.' }, 400); }
@@ -85,7 +85,14 @@ Deno.serve(async (req) => {
     const out = JSON.parse(text?.text || '{}');
     return json({ plaats: out.plaats || 'kast', items: Array.isArray(out.items) ? out.items.slice(0, 80) : [] });
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) return json({ error: 'niet-ingesteld' }, 503);
+    // De echte fout komt in de Logs van de functie in Supabase.
+    console.error('voorraad-foto:', e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : e);
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
+      return json({ error: 'niet-ingesteld', reden: 'Anthropic weigert de sleutel. Kijk of ANTHROPIC_API_KEY klopt.' }, 503);
+    }
+    if (e instanceof Anthropic.BadRequestError && /credit|balance/i.test(e.message)) {
+      return json({ error: 'niet-ingesteld', reden: 'Er staat geen tegoed meer op het Anthropic-account.' }, 503);
+    }
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'Even te druk, probeer het zo opnieuw.' }, 429);
     if (e instanceof Anthropic.APIError) return json({ error: `De AI gaf een fout (${e.status}).` }, 502);
     return json({ error: 'Er ging iets mis bij het bekijken van de foto.' }, 500);
