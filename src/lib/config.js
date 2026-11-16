@@ -3,3 +3,7 @@
 // Een .env.local (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) gaat voor, handig om te testen.
 export const SUPABASE_URL = 'https://jzztsspjpdhafcjfsbig.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_Fnf-FjXunlfzAIChnooZgQ_r9uDdD5Q';
+
+// Google Agenda: de "Client ID" van een OAuth-client (type Webtoepassing) uit Google Cloud.
+// Ook die is publiek bedoeld. Leeg = de app opent Google Agenda met de afspraak al ingevuld.
+export const GOOGLE_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';

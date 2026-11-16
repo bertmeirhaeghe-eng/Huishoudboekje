@@ -11,6 +11,12 @@ import Settings from './components/Settings.jsx';
 import Chart from './components/Chart.jsx';
 import Celebrate from './components/Celebrate.jsx';
 import Voice from './components/Voice.jsx';
+import Lists from './components/Lists.jsx';
+import Kitchen from './components/Kitchen.jsx';
+import Agenda, { saveEvent } from './components/Agenda.jsx';
+import TaxHelper from './components/TaxHelper.jsx';
+import { useHome } from './lib/useHome.js';
+import { todayISO } from './lib/format.js';
 import { money } from './lib/format.js';
 import { category } from './lib/categories.js';
 
@@ -49,6 +55,14 @@ function Boekje({ household, onHouseholdChange }) {
   const [error, setError] = useState('');
   const [party, setParty] = useState(null);
   const [draft, setDraft] = useState(null); // voorinvulling vanuit spraak
+  const [beforeVoice, setBeforeVoice] = useState('overzicht');
+  const [listTab, setListTab] = useState('boodschappen');
+  const [kitchenTab, setKitchenTab] = useState('menu');
+  const [openRecipe, setOpenRecipe] = useState(null);
+  const [menuFocus, setMenuFocus] = useState(null);
+  const home = useHome(household.id);
+  const memberNames = useMemo(() => household.members.map((m) => m.display_name).filter(Boolean), [household.members]);
+  const toast = useCallback((text) => setParty({ text, id: Date.now() }), []);
 
   const months = useMemo(() => Array.from({ length: CHART_MONTHS }, (_, i) => shiftMonth(month, i - CHART_MONTHS + 1)), [month]);
 
@@ -78,6 +92,27 @@ function Boekje({ household, onHouseholdChange }) {
   const bookBudgets = useMemo(() => Object.fromEntries(budgets.filter((b) => b.book === book).map((b) => [b.category, b.amount_cents])), [budgets, book]);
 
   const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
+
+  // Spraak voor het huishouden: lijst, voorraad, menu, agenda.
+  async function saveHome(cmd) {
+    if (cmd.kind === 'lijst') {
+      const n = await home.act.addShopping(cmd.items);
+      setListTab('boodschappen'); go('lijst');
+      toast(n ? `${n} ${n === 1 ? 'ding' : 'dingen'} op de lijst` : 'Stond al op de lijst');
+    } else if (cmd.kind === 'voorraad') {
+      await home.act.markOut(cmd.items, cmd.status);
+      setListTab('boodschappen'); go('lijst');
+      toast(`${cmd.items.map((i) => i.name).join(', ')} op de lijst`);
+    } else if (cmd.kind === 'menu') {
+      await home.act.setMenu(cmd.date, cmd.meal, cmd.recipe_id);
+      setKitchenTab('menu'); setOpenRecipe(null); setMenuFocus(cmd.date); go('keuken');
+      toast(`${cmd.meal} staat op het menu`);
+    } else if (cmd.kind === 'agenda') {
+      const how = await saveEvent({ title: cmd.title, date: cmd.date, time: cmd.time, who: cmd.who });
+      go('agenda');
+      if (how === 'google') toast('In je Google Agenda gezet');
+    }
+  }
 
   async function saveEntries(list) {
     for (const entry of list) await store.addEntry({ ...entry, household_id: household.id });
@@ -110,7 +145,15 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'grafiek') {
     content = <Chart {...common} entries={bookEntries} months={months} />;
   } else if (screen === 'meer') {
-    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} />;
+    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} />;
+  } else if (screen === 'privezaak') {
+    content = <TaxHelper onBack={() => go('meer')} onBook={(d) => { setDraft({ type: 'uit', date: todayISO(), ...d }); go('toevoegen'); }} />;
+  } else if (screen === 'lijst') {
+    content = <Lists home={home} tab={listTab} setTab={setListTab} toast={toast} />;
+  } else if (screen === 'keuken') {
+    content = <Kitchen home={home} tab={kitchenTab} setTab={setKitchenTab} toast={toast} openRecipe={openRecipe} setOpenRecipe={setOpenRecipe} focusDate={menuFocus} />;
+  } else if (screen === 'agenda') {
+    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} />;
   } else {
     content = (
       <Overview
@@ -124,6 +167,10 @@ function Boekje({ household, onHouseholdChange }) {
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
         onOpenChart={() => go('grafiek')}
         onOpenBudgets={() => go('budgetten')}
+        today={{ meal: home.menu.find((m) => m.date === todayISO()), shopping: home.shopping.filter((x) => !x.done).length, low: home.pantry.filter((p) => p.status !== 'ok').length }}
+        onOpenList={() => { setListTab('boodschappen'); go('lijst'); }}
+        onOpenMenu={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }}
+        onOpenTax={() => go('privezaak')}
       />
     );
   }
@@ -131,28 +178,35 @@ function Boekje({ household, onHouseholdChange }) {
   return (
     <div className={'app' + (book === 'zaak' ? ' zaak-mode' : '')}>
       <nav className="nav" aria-label="Hoofdmenu">
-        <NavBtn icon="home" label="Overzicht" on={screen === 'overzicht'} onClick={() => go('overzicht')} />
-        <NavBtn icon="chart" label="Grafiek" on={screen === 'grafiek'} onClick={() => go('grafiek')} />
-        <button className="fab mic-fab" aria-label="Spreken" onClick={() => setScreen('spraak')}>
+        <NavBtn icon="wallet" label="Geld" on={MONEY.includes(screen)} onClick={() => go('overzicht')} />
+        <NavBtn icon="list" label="Lijst" on={screen === 'lijst'} onClick={() => go('lijst')} badge={home.shopping.filter((x) => !x.done).length} />
+        <button className="fab mic-fab" aria-label="Spreken" onClick={() => { if (screen !== 'spraak') setBeforeVoice(screen); setScreen('spraak'); }}>
           <Icon name="mic" size={30} stroke={2.2} />
         </button>
-        <button className={'add-fab' + (screen === 'toevoegen' ? ' hidden-on-phone' : '')} aria-label="Uitgave of inkomst toevoegen" aria-current={screen === 'toevoegen' ? 'page' : undefined} onClick={() => { setDraft(null); go('toevoegen'); }}>
-          <Icon name="plus" size={26} stroke={2.4} />
-        </button>
-        <NavBtn icon="target" label="Budgetten" on={screen === 'budgetten'} onClick={() => go('budgetten')} />
-        <NavBtn icon="gear" label="Meer" on={screen === 'meer'} onClick={() => go('meer')} />
+        {['overzicht', 'grafiek', 'budgetten'].includes(screen) && (
+          <button className="add-fab" aria-label="Uitgave of inkomst toevoegen" onClick={() => { setDraft(null); go('toevoegen'); }}>
+            <Icon name="plus" size={26} stroke={2.4} />
+          </button>
+        )}
+        <NavBtn icon="pot" label="Keuken" on={screen === 'keuken'} onClick={() => { if (screen === 'keuken') setOpenRecipe(null); setMenuFocus(null); go('keuken'); }} />
+        <NavBtn icon="calendar" label="Agenda" on={screen === 'agenda'} onClick={() => go('agenda')} />
+        <NavBtn icon="gear" label="Meer" on={screen === 'meer' || screen === 'privezaak'} onClick={() => go('meer')} />
       </nav>
       <main className="main">
         {store.mode === 'demo' && (
           <div className="banner" style={{ marginBottom: 14 }}>Proefmodus: gegevens blijven alleen op dit toestel.</div>
         )}
         {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
+        {home.error && !error && ['lijst', 'keuken', 'agenda', 'overzicht'].includes(screen) && <div className="error" style={{ marginBottom: 14 }}>{home.error}</div>}
         <div className="screen" key={screen}>{content}</div>
       </main>
       {screen === 'spraak' && (
         <Voice
           isOwner={isOwner}
-          onCancel={() => setScreen('overzicht')}
+          recipes={home.recipes}
+          members={memberNames}
+          onHome={saveHome}
+          onCancel={() => setScreen(beforeVoice)}
           onSave={saveEntries}
           onEdit={(item) => { setDraft(item); go('toevoegen'); }}
         />
@@ -162,10 +216,12 @@ function Boekje({ household, onHouseholdChange }) {
   );
 }
 
-function NavBtn({ icon, label, on, onClick }) {
+const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen'];
+
+function NavBtn({ icon, label, on, onClick, badge }) {
   return (
     <button onClick={onClick} aria-current={on ? 'page' : undefined}>
-      <Icon name={icon} size={24} />
+      <span className="nav-ico"><Icon name={icon} size={24} />{badge > 0 && <i className="badge">{badge > 99 ? '99+' : badge}</i>}</span>
       {label}
     </button>
   );

@@ -27,6 +27,7 @@ function seed() {
     household: { id: hid, name: 'Ons gezin', invite_code: 'PROEF1', role: 'eigenaar', members: [{ user_id: 'demo-user', display_name: 'Ik', role: 'eigenaar' }] },
     entries: [],
     budgets: [],
+    rows: {},
   };
 }
 
@@ -71,6 +72,41 @@ export const demoStore = {
     if (cents > 0) d.budgets.push({ household_id: hid, book, category, amount_cents: cents });
     save(d);
   },
+  async listRows(table) { return (db().rows || {})[table] || []; },
+  async addRows(table, rows) {
+    const d = db();
+    d.rows = d.rows || {};
+    const made = rows.map((r) => ({ id: uid(), created_at: new Date().toISOString(), ...r }));
+    d.rows[table] = [...(d.rows[table] || []), ...made];
+    save(d);
+    return made;
+  },
+  async updateRow(table, id, patch) {
+    const d = db();
+    const list = (d.rows || {})[table] || [];
+    const i = list.findIndex((r) => r.id === id);
+    if (i < 0) return null;
+    list[i] = { ...list[i], ...patch };
+    save(d);
+    return list[i];
+  },
+  async deleteRows(table, ids) {
+    const d = db();
+    d.rows = d.rows || {};
+    d.rows[table] = (d.rows[table] || []).filter((r) => !ids.includes(r.id));
+    save(d);
+  },
+  async setMenu(hid, date, meal, recipeId = null) {
+    const d = db();
+    d.rows = d.rows || {};
+    const list = (d.rows.menu_days || []).filter((m) => m.date !== date);
+    if (meal) list.push({ household_id: hid, date, meal, recipe_id: recipeId });
+    d.rows.menu_days = list;
+    save(d);
+  },
+  async setCalendarUrl() { throw new Error('De agenda koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
+  async hasCalendar() { return false; },
+  async calendarIcs() { return null; },
   subscribe(_hid, fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);

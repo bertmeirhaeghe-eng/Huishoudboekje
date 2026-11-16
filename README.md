@@ -34,6 +34,35 @@ Elke wijziging op `main` wordt automatisch gebouwd en op de branch `gh-pages` ge
 ### 4. Op de telefoon zetten
 Open het adres in **Chrome** op Android, tik op de drie puntjes › **App installeren** (of *Toevoegen aan startscherm*). Maak een account, kies **Nieuw boekje**, en nodig je gezin uit via **Meer** › **Iemand uitnodigen**.
 
+## Thuis: boodschappen, voorraad, recepten, weekmenu en agenda
+
+- **Boodschappen**: per winkelrayon gesorteerd, afvinken in de winkel. Wat je afvinkt, staat daarna weer op "genoeg" in de voorraad.
+- **Voorraadkast**: tik op een product om "bijna op" of "op" aan te duiden. Het komt dan vanzelf op de boodschappenlijst.
+- **Recepten**: neem een foto van een recept. De telefoon leest de tekst zelf (gratis, zonder account). Bij elk recept zie je wat je in huis hebt en wat je moet kopen.
+- **Weekmenu**: kies per dag een recept of typ een maaltijd. Eén knop zet alles wat ontbreekt voor de week op de lijst.
+- **Agenda**: werkt met je Google Agenda.
+- **Privé of zaak?**: vuistregels voor aankopen via de vennootschap (onder Meer). Indicatief, geen fiscaal advies.
+
+Met de microfoon kan je zeggen: "melk en eieren op de lijst", "de koffie is op", "vrijdag eten we lasagne" of "zaterdag om 10 uur zwemles".
+
+### Na deze update: database bijwerken
+
+Plak `supabase/schema.sql` opnieuw volledig in Supabase > SQL Editor en klik op Run. Bestaande gegevens blijven staan.
+
+### Google Agenda koppelen
+
+De eenvoudigste manier is het geheime iCal-adres:
+
+1. Open Google Agenda op de computer. Ga naar Instellingen, kies je agenda en dan "Agenda integreren".
+2. Kopieer het "Geheime adres in iCal-indeling".
+3. Plak het in de app onder Meer > Google Agenda.
+
+Het adres wordt bewaard in de database. Niemand kan het daar uitlezen, ook gezinsleden niet: de app krijgt enkel de afspraken. Zet het adres nooit in de code, want de site en de repo zijn openbaar.
+
+Zo kan de app je afspraken alleen lezen. Nieuwe afspraken opent de app in Google Agenda, met alles al ingevuld.
+
+Wil je dat de app ook zelf afspraken toevoegt? Vul dan een OAuth Client ID in bij `GOOGLE_CLIENT_ID` in `src/lib/config.js`. Het type is Web application, met als origin `https://bertmeirhaeghe-eng.github.io`.
+
 ## Voor ontwikkelaars
 
 ```bash
