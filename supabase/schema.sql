@@ -177,6 +177,59 @@ drop policy if exists "gezin weekmenu" on public.menu_days;
 create policy "gezin weekmenu" on public.menu_days
   for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
 
+-- ───────────── Google Agenda (geheim iCal-adres) ─────────────
+-- Het geheime adres staat alleen hier in de database, nooit in de code van de app.
+-- Niemand kan het uitlezen: de app krijgt enkel de afspraken, via calendar_ics().
+
+create extension if not exists http with schema extensions;
+
+create table if not exists public.household_secrets (
+  household_id uuid primary key references public.households(id) on delete cascade,
+  ical_url text check (ical_url is null or ical_url ~ '^https://calendar\.google\.com/calendar/ical/[^\s]+\.ics$')
+);
+alter table public.household_secrets enable row level security;
+-- Bewust geen policies: rechtstreeks lezen of schrijven kan niet.
+revoke all on public.household_secrets from anon, authenticated;
+
+create or replace function public.set_calendar_url(p_url text) returns void
+language plpgsql security definer set search_path = public as $$
+declare hid uuid;
+begin
+  select household_id into hid from household_members where user_id = auth.uid() and role = 'eigenaar' limit 1;
+  if hid is null then raise exception 'only the owner can set the calendar'; end if;
+  insert into household_secrets (household_id, ical_url) values (hid, nullif(trim(p_url), ''))
+    on conflict (household_id) do update set ical_url = excluded.ical_url;
+end;
+$$;
+
+create or replace function public.has_calendar() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from household_secrets s join household_members m on m.household_id = s.household_id
+    where m.user_id = auth.uid() and s.ical_url is not null
+  );
+$$;
+
+create or replace function public.calendar_ics() returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare url text; r extensions.http_response;
+begin
+  select s.ical_url into url from household_secrets s join household_members m on m.household_id = s.household_id
+    where m.user_id = auth.uid() and s.ical_url is not null limit 1;
+  if url is null then return null; end if;
+  r := extensions.http_get(url);
+  if r.status <> 200 then raise exception 'calendar fetch failed (%)', r.status; end if;
+  return r.content;
+end;
+$$;
+
+revoke execute on function public.set_calendar_url(text) from public, anon;
+revoke execute on function public.has_calendar() from public, anon;
+revoke execute on function public.calendar_ics() from public, anon;
+grant execute on function public.set_calendar_url(text) to authenticated;
+grant execute on function public.has_calendar() to authenticated;
+grant execute on function public.calendar_ics() to authenticated;
+
 -- ───────────── Gezin aanmaken en aansluiten ─────────────
 
 create or replace function public.create_household(p_name text, p_display_name text) returns uuid

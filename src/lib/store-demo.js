@@ -104,6 +104,9 @@ export const demoStore = {
     d.rows.menu_days = list;
     save(d);
   },
+  async setCalendarUrl() { throw new Error('De agenda koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
+  async hasCalendar() { return false; },
+  async calendarIcs() { return null; },
   subscribe(_hid, fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);

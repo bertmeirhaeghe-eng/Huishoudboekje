@@ -92,6 +92,12 @@ export function createSupabaseStore(url, anonKey) {
       else must(await sb.from('menu_days').delete().eq('household_id', hid).eq('date', date));
     },
 
+    // Google Agenda via het geheime iCal-adres. Het adres blijft in de database;
+    // de app krijgt enkel de inhoud van de agenda terug.
+    async setCalendarUrl(url) { must(await sb.rpc('set_calendar_url', { p_url: url })); },
+    async hasCalendar() { return Boolean(must(await sb.rpc('has_calendar'))); },
+    async calendarIcs() { return must(await sb.rpc('calendar_ics')); },
+
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
     subscribe(hid, fn, tables = ['entries', 'budgets']) {
       let ch = sb.channel('boekje-' + tables.join('-') + '-' + hid);
@@ -113,6 +119,10 @@ function translate(msg) {
   if (/Email not confirmed/i.test(m)) return 'Bevestig eerst je e-mailadres via de mail die je kreeg.';
   if (/already registered/i.test(m)) return 'Dit e-mailadres heeft al een account. Log gewoon in.';
   if (/Password should be at least/i.test(m)) return 'Kies een wachtwoord van minstens 6 tekens.';
+  if (/household_secrets_ical_url_check/i.test(m)) return 'Dat is geen geheim iCal-adres van Google Agenda. Het begint met https://calendar.google.com/calendar/ical/ en eindigt op .ics.';
+  if (/only the owner can set the calendar/i.test(m)) return 'Alleen de eigenaar van het gezin kan de agenda koppelen.';
+  if (/calendar fetch failed/i.test(m)) return 'Google Agenda gaf geen antwoord. Klopt het geheime adres nog?';
+  if (/function .*(calendar_ics|has_calendar|set_calendar_url).* does not exist|Could not find the function/i.test(m)) return 'De database mist nog de agenda-functies. Voer schema.sql opnieuw uit in Supabase.';
   if (/invite code/i.test(m)) return 'Die uitnodigingscode bestaat niet.';
   if (/relation .* does not exist|Could not find the table/i.test(m)) return 'De database mist nog de nieuwe tabellen. Voer schema.sql opnieuw uit in Supabase.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Geen verbinding. Probeer het zo meteen opnieuw.';

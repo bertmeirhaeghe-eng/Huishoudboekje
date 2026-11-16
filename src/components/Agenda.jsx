@@ -4,8 +4,20 @@ import { CalendarIllustration } from './Illustrations.jsx';
 import * as gcal from '../lib/gcal.js';
 import { addDays } from '../lib/kitchen.js';
 import { dayLabel, todayISO } from '../lib/format.js';
+import { eventsBetween } from '../lib/ics.js';
+import { store } from '../lib/store.js';
 
 const SPAN = 28;
+
+// De iCal-agenda even onthouden, zodat wisselen tussen schermen niet telkens opnieuw laadt.
+let icsCache = null; // { text, at }
+export function forgetCalendar() { icsCache = null; }
+async function loadIcs(force = false) {
+  if (!force && icsCache && Date.now() - icsCache.at < 5 * 60000) return icsCache.text;
+  const text = await store.calendarIcs();
+  icsCache = { text, at: Date.now() };
+  return text;
+}
 
 // Afspraak bewaren: rechtstreeks in Google Agenda als dat gekoppeld is,
 // anders Google Agenda openen met alles al ingevuld. Geeft 'google' of 'link' terug.
@@ -23,12 +35,14 @@ export async function saveEvent(ev) {
     }
   }
   window.open(gcal.templateLink(ev), '_blank', 'noopener');
+  forgetCalendar();
   return 'link';
 }
 
-export default function Agenda({ home, members, toast }) {
+export default function Agenda({ home, members, toast, isOwner, onOpenSettings }) {
   const today = todayISO();
   const configured = gcal.gcalConfigured();
+  const [ics, setIcs] = useState(null); // null = nog niet geweten, true/false = wel of geen iCal-koppeling
   const [token, setToken] = useState(gcal.getToken());
   const [events, setEvents] = useState(null);
   const [error, setError] = useState('');
@@ -37,18 +51,26 @@ export default function Agenda({ home, members, toast }) {
   const [pickCal, setPickCal] = useState(false);
   const to = addDays(today, SPAN - 1);
 
-  const load = useCallback(async () => {
-    if (!gcal.getToken()) return;
+  const load = useCallback(async (force = false) => {
     try {
-      setEvents(await gcal.listEvents(today, to));
+      if (configured) {
+        if (!gcal.getToken()) return;
+        setEvents(await gcal.listEvents(today, to));
+      } else {
+        const has = await store.hasCalendar();
+        setIcs(has);
+        if (!has) return;
+        const text = await loadIcs(force);
+        setEvents(text ? eventsBetween(text, today, to) : []);
+      }
       setError('');
     } catch (e) {
       if (e.needsAuth) setToken(null);
       else setError(e.message);
     }
-  }, [today, to]);
+  }, [today, to, configured]);
 
-  useEffect(() => { if (token) load(); }, [token, load]);
+  useEffect(() => { if (token || !configured) load(); }, [token, configured, load]);
 
   async function connect() {
     setError('');
@@ -72,12 +94,13 @@ export default function Agenda({ home, members, toast }) {
         <button className="btn" onClick={() => setAdding(true)} style={{ minHeight: 44 }}><Icon name="plus" /> Afspraak</button>
       </div>
 
-      {!configured && (
+      {!configured && ics === false && (
         <div className="card empty">
           <CalendarIllustration />
           <b>Je Google Agenda</b>
           <span className="small muted">Afspraken die je hier of met de microfoon toevoegt, openen in Google Agenda met alles al ingevuld. Daar tik je op Opslaan.</span>
-          <span className="small muted">Zodra de koppeling ingesteld is, zie je je afspraken ook hier.</span>
+          <span className="small muted">{isOwner ? 'Wil je je afspraken ook hier zien? Koppel je agenda onder Meer.' : 'De eigenaar van het gezin kan de agenda koppelen onder Meer.'}</span>
+          {isOwner && <button className="btn" onClick={onOpenSettings} style={{ marginTop: 6 }}><Icon name="link" /> Agenda koppelen</button>}
           <a className="btn ghost" href="https://calendar.google.com/" target="_blank" rel="noopener" style={{ marginTop: 6 }}><Icon name="calendar" /> Google Agenda openen</a>
         </div>
       )}
@@ -97,7 +120,14 @@ export default function Agenda({ home, members, toast }) {
 
       {error && <div className="error">{error}</div>}
 
-      {(token || home.menu.length > 0) && (
+      {!configured && ics && (
+        <div className="spread">
+          <span className="tiny muted">Uit je Google Agenda. Nieuwe afspraken verschijnen hier na enkele minuten.</span>
+          <button className="tiny bold link" onClick={() => load(true)}>Vernieuwen</button>
+        </div>
+      )}
+
+      {(token || ics || home.menu.length > 0) && (
         <div className="stack stagger" style={{ gap: 10 }}>
           {byDay.map(({ iso, ev, meal }) => (
             <div key={iso} className={'agenda-day' + (iso === today ? ' today' : '')}>
@@ -115,11 +145,11 @@ export default function Agenda({ home, members, toast }) {
                     <span className="grow">{meal.meal}</span>
                   </div>
                 )}
-                {!ev.length && !meal && <div className="entry tiny muted">{token ? 'Niets gepland' : ''}</div>}
+                {!ev.length && !meal && <div className="entry tiny muted">{token || ics ? 'Niets gepland' : ''}</div>}
               </div>
             </div>
           ))}
-          {token && events === null && <div className="small muted">Afspraken laden…</div>}
+          {(token || ics) && events === null && <div className="small muted">Afspraken laden…</div>}
         </div>
       )}
 
@@ -131,10 +161,11 @@ export default function Agenda({ home, members, toast }) {
             const how = await saveEvent(ev);
             setAdding(false);
             if (how === 'google') { setToken(gcal.getToken()); toast('In je Google Agenda gezet'); load(); }
+            else toast('Tik in Google Agenda op Opslaan');
           }}
         />
       )}
-      {open && <EventDetail ev={open} onClose={() => setOpen(null)} onDelete={async () => { await gcal.deleteEvent(open.id); setOpen(null); load(); }} />}
+      {open && <EventDetail ev={open} canDelete={configured} onClose={() => setOpen(null)} onDelete={async () => { await gcal.deleteEvent(open.id); setOpen(null); load(); }} />}
       {pickCal && <CalendarPicker onClose={() => setPickCal(false)} onPick={() => { setPickCal(false); setEvents(null); load(); }} />}
     </div>
   );
@@ -184,7 +215,7 @@ export function EventSheet({ initial = {}, members = [], onClose, onSave }) {
   );
 }
 
-function EventDetail({ ev, onClose, onDelete }) {
+function EventDetail({ ev, canDelete, onClose, onDelete }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <div className="backdrop" onClick={onClose}>
@@ -196,8 +227,8 @@ function EventDetail({ ev, onClose, onDelete }) {
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Sluiten" style={{ background: 'var(--bg)' }}><Icon name="close" /></button>
         </div>
-        {ev.link && <a className="btn ghost" href={ev.link} target="_blank" rel="noopener"><Icon name="calendar" /> Openen in Google Agenda</a>}
-        {!confirm
+        <a className="btn ghost" href={ev.link || `https://calendar.google.com/calendar/r/day/${ev.date.replace(/-/g, '/')}`} target="_blank" rel="noopener"><Icon name="calendar" /> Openen in Google Agenda</a>
+        {!canDelete ? null : !confirm
           ? <button className="btn danger" onClick={() => setConfirm(true)}><Icon name="trash" /> Verwijderen</button>
           : (
             <div className="row">

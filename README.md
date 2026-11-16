@@ -51,13 +51,17 @@ Plak `supabase/schema.sql` opnieuw volledig in Supabase > SQL Editor en klik op 
 
 ### Google Agenda koppelen
 
-1. Ga in Google Cloud naar APIs & Services > Credentials en maak een OAuth Client ID (type Web application) of gebruik een bestaande.
-2. Zet bij Authorized JavaScript origins: `https://bertmeirhaeghe-eng.github.io`.
-3. Zet de Google Calendar API aan (APIs & Services > Library).
-4. Zet bij het OAuth-toestemmingsscherm de Google-accounts van het gezin als testgebruiker.
-5. Vul de Client ID in bij `GOOGLE_CLIENT_ID` in `src/lib/config.js`. Die is publiek bedoeld; deel nooit het client secret.
+De eenvoudigste manier is het geheime iCal-adres:
 
-Zonder Client ID opent de app Google Agenda met de afspraak al ingevuld.
+1. Open Google Agenda op de computer. Ga naar Instellingen, kies je agenda en dan "Agenda integreren".
+2. Kopieer het "Geheime adres in iCal-indeling".
+3. Plak het in de app onder Meer > Google Agenda.
+
+Het adres wordt bewaard in de database. Niemand kan het daar uitlezen, ook gezinsleden niet: de app krijgt enkel de afspraken. Zet het adres nooit in de code, want de site en de repo zijn openbaar.
+
+Zo kan de app je afspraken alleen lezen. Nieuwe afspraken opent de app in Google Agenda, met alles al ingevuld.
+
+Wil je dat de app ook zelf afspraken toevoegt? Vul dan een OAuth Client ID in bij `GOOGLE_CLIENT_ID` in `src/lib/config.js`. Het type is Web application, met als origin `https://bertmeirhaeghe-eng.github.io`.
 
 ## Voor ontwikkelaars
 

@@ -153,7 +153,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'keuken') {
     content = <Kitchen home={home} tab={kitchenTab} setTab={setKitchenTab} toast={toast} openRecipe={openRecipe} setOpenRecipe={setOpenRecipe} focusDate={menuFocus} />;
   } else if (screen === 'agenda') {
-    content = <Agenda home={home} members={memberNames} toast={toast} />;
+    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} />;
   } else {
     content = (
       <Overview
