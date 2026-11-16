@@ -15,6 +15,7 @@ import Lists from './components/Lists.jsx';
 import Kitchen from './components/Kitchen.jsx';
 import Agenda, { saveEvent } from './components/Agenda.jsx';
 import TaxHelper from './components/TaxHelper.jsx';
+import BankImport from './components/BankImport.jsx';
 import { useHome } from './lib/useHome.js';
 import { todayISO } from './lib/format.js';
 import { money } from './lib/format.js';
@@ -145,7 +146,9 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'grafiek') {
     content = <Chart {...common} entries={bookEntries} months={months} />;
   } else if (screen === 'meer') {
-    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} />;
+    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} />;
+  } else if (screen === 'import') {
+    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(date.slice(0, 7)); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
   } else if (screen === 'privezaak') {
     content = <TaxHelper onBack={() => go('meer')} onBook={(d) => { setDraft({ type: 'uit', date: todayISO(), ...d }); go('toevoegen'); }} />;
   } else if (screen === 'lijst') {
@@ -190,7 +193,7 @@ function Boekje({ household, onHouseholdChange }) {
         )}
         <NavBtn icon="pot" label="Keuken" on={screen === 'keuken'} onClick={() => { if (screen === 'keuken') setOpenRecipe(null); setMenuFocus(null); go('keuken'); }} />
         <NavBtn icon="calendar" label="Agenda" on={screen === 'agenda'} onClick={() => go('agenda')} />
-        <NavBtn icon="gear" label="Meer" on={screen === 'meer' || screen === 'privezaak'} onClick={() => go('meer')} />
+        <NavBtn icon="gear" label="Meer" on={screen === 'meer' || screen === 'privezaak' || screen === 'import'} onClick={() => go('meer')} />
       </nav>
       <main className="main">
         {store.mode === 'demo' && (

@@ -7,7 +7,7 @@ import { store } from '../lib/store.js';
 import * as gcal from '../lib/gcal.js';
 import { forgetCalendar } from './Agenda.jsx';
 
-export default function Settings({ household, onChange, onOpenTax }) {
+export default function Settings({ household, onChange, onOpenTax, onOpenImport }) {
   const [msg, setMsg] = useState('');
   const isOwner = household.role === 'eigenaar';
 
@@ -62,6 +62,14 @@ export default function Settings({ household, onChange, onOpenTax }) {
       <MyName household={household} onChange={onChange} />
 
       <GoogleCalendar isOwner={isOwner} />
+
+      {onOpenImport && (
+        <button className="card tile-wide" onClick={onOpenImport}>
+          <span className="tile-ico green"><Icon name="download" size={20} /></span>
+          <span className="grow" style={{ textAlign: 'left' }}><b style={{ display: 'block' }}>Bankafschrift importeren</b><span className="tiny muted">CSV van Crelan of een andere bank</span></span>
+          <Icon name="next" size={18} />
+        </button>
+      )}
 
       <section className="card stack" style={{ gap: 10 }}>
         <h2>Exporteren</h2>

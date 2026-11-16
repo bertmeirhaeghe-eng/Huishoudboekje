@@ -160,7 +160,7 @@ const GEZIN_WORDS = /(?<![a-zà-ÿ])(privé|prive|gezin|thuis|persoonlijk)(?![a-
 const IN_WORDS = /(?<![a-zà-ÿ])(ontvangen|gekregen|kreeg|inkomst|inkomsten|verdiend|binnengekomen|binnen gekregen|gestort op|storting|betaald gekregen|uitbetaald)(?![a-zà-ÿ])/;
 const OUT_WORDS = /(?<![a-zà-ÿ])(uitgegeven|betaald|gekocht|kost|kostte|uitgave|aankoop)(?![a-zà-ÿ])/;
 
-function findRule(text) {
+export function findRule(text) {
   for (const r of RULES) {
     for (const w of r.words) {
       const re = new RegExp('(^|[^a-zà-ÿ])' + w.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-zà-ÿ]|$)');

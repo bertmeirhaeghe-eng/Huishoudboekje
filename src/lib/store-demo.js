@@ -60,6 +60,12 @@ export const demoStore = {
     save(d);
     return row;
   },
+  async addEntries(list) {
+    const d = db();
+    for (const entry of list) d.entries.push({ ...entry, id: uid(), created_by: d.user.id, created_at: new Date().toISOString() });
+    save(d);
+    return list.length;
+  },
   async deleteEntry(id) {
     const d = db();
     d.entries = d.entries.filter((e) => e.id !== id);

@@ -383,3 +383,11 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; 
   .week { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   .nav button { font-size: 12px; }
 }
+
+/* Bankimport */
+.import-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.import-row:last-child { border-bottom: 0; }
+.import-row .cat-ico { width: 34px; height: 34px; border-radius: 11px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cat-select { flex: 1; min-width: 0; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 13px; padding: 0 8px; }
+details summary { cursor: pointer; }
