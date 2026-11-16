@@ -125,9 +125,14 @@ export function createSupabaseStore(url, anonKey) {
       if (!error) return data;
       const res = error.context;
       let msg = '';
-      try { msg = (await res.json()).error || ''; } catch { /* geen JSON */ }
+      let reden = '';
+      try { const b = await res.json(); msg = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
       if (!res || res.status === 404 || res.status === 503 || msg === 'niet-ingesteld' || error.name === 'FunctionsFetchError' || error.name === 'FunctionsRelayError') {
-        const e = new Error('geen-ai'); e.code = 'geen-ai'; throw e;
+        if (!reden) {
+          if (res?.status === 404) reden = 'De functie voorraad-foto is niet gevonden in Supabase.';
+          else if (error.name !== 'FunctionsHttpError') reden = 'De functie voorraad-foto is niet bereikbaar.';
+        }
+        const e = new Error('geen-ai'); e.code = 'geen-ai'; e.reden = reden; throw e;
       }
       throw new Error(msg || 'De foto kon niet bekeken worden.');
     },
