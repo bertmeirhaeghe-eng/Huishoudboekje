@@ -165,7 +165,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'keuken') {
     content = <Kitchen home={home} tab={kitchenTab} setTab={setKitchenTab} toast={toast} openRecipe={openRecipe} setOpenRecipe={setOpenRecipe} focusDate={menuFocus} />;
   } else if (screen === 'agenda') {
-    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} />;
+    content = <Agenda home={home} members={memberNames} toast={toast} isOwner={isOwner} onOpenSettings={() => go('meer')} onOpenBoard={() => go('bord')} />;
   } else {
     content = (
       <Overview
@@ -189,7 +189,7 @@ function Boekje({ household, onHouseholdChange }) {
   }
 
   // Het weekbord voor de tablet: volledig scherm, zonder menubalk.
-  if (screen === 'bord') return <Board home={home} onClose={() => go('meer')} />;
+  if (screen === 'bord') return <Board home={home} onClose={() => go('agenda')} />;
 
   return (
     <div className={'app' + (book === 'zaak' ? ' zaak-mode' : '')}>
@@ -206,6 +206,7 @@ function Boekje({ household, onHouseholdChange }) {
         )}
         <NavBtn icon="pot" label="Keuken" on={screen === 'keuken'} onClick={() => { if (screen === 'keuken') setOpenRecipe(null); setMenuFocus(null); go('keuken'); }} />
         <NavBtn icon="calendar" label="Agenda" on={screen === 'agenda'} onClick={() => go('agenda')} />
+        <NavBtn icon="tablet" label="Weekbord" on={false} onClick={() => go('bord')} className="wide-only" />
         <NavBtn icon="gear" label="Meer" on={screen === 'meer' || screen === 'privezaak' || screen === 'import'} onClick={() => go('meer')} />
       </nav>
       <main className="main">
@@ -234,9 +235,9 @@ function Boekje({ household, onHouseholdChange }) {
 
 const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen'];
 
-function NavBtn({ icon, label, on, onClick, badge }) {
+function NavBtn({ icon, label, on, onClick, badge, className }) {
   return (
-    <button onClick={onClick} aria-current={on ? 'page' : undefined}>
+    <button onClick={onClick} aria-current={on ? 'page' : undefined} className={className}>
       <span className="nav-ico"><Icon name={icon} size={24} />{badge > 0 && <i className="badge">{badge > 99 ? '99+' : badge}</i>}</span>
       {label}
     </button>

@@ -128,11 +128,14 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; 
 
 .two-col { display: grid; gap: 16px; }
 
+.nav .wide-only { display: none; }
+
 /* Tablet en groter: zijbalk in plaats van onderbalk, inhoud naast elkaar */
 @media (min-width: 900px) {
   :root { --nav-h: 0px; }
   .nav { position: sticky; top: 0; height: 100dvh; width: 104px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 24px 0; border-top: 0; border-right: 1px solid var(--line); }
   .nav button { width: 84px; height: 64px; border-radius: 16px; margin: 0 auto; }
+  .nav .wide-only { display: flex; }
   .nav button[aria-current='page'] { background: var(--green-soft); color: var(--green-dark); }
   .nav .fab { order: -1; margin: 0 auto 12px; width: 64px; height: 64px; border-radius: 32px; }
   .main { padding: 28px 32px 40px; }

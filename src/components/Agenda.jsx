@@ -39,7 +39,7 @@ export async function saveEvent(ev) {
   return 'link';
 }
 
-export default function Agenda({ home, members, toast, isOwner, onOpenSettings }) {
+export default function Agenda({ home, members, toast, isOwner, onOpenSettings, onOpenBoard }) {
   const today = todayISO();
   const configured = gcal.gcalConfigured();
   const [ics, setIcs] = useState(null); // null = nog niet geweten, true/false = wel of geen iCal-koppeling
@@ -91,7 +91,10 @@ export default function Agenda({ home, members, toast, isOwner, onOpenSettings }
     <div className="stack" style={{ maxWidth: 720 }}>
       <div className="spread">
         <h1>Agenda</h1>
-        <button className="btn" onClick={() => setAdding(true)} style={{ minHeight: 44 }}><Icon name="plus" /> Afspraak</button>
+        <div className="row" style={{ gap: 8 }}>
+          {onOpenBoard && <button className="btn ghost" onClick={onOpenBoard} style={{ minHeight: 44 }}><Icon name="tablet" /> Weekbord</button>}
+          <button className="btn" onClick={() => setAdding(true)} style={{ minHeight: 44 }}><Icon name="plus" /> Afspraak</button>
+        </div>
       </div>
 
       {!configured && ics === false && (
