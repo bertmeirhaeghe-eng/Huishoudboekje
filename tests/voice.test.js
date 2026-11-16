@@ -79,3 +79,13 @@ test('komma in een bedrag splitst de zin niet', () => {
   assert.equal(r[0].amount_cents, 6430);
   assert.equal(parseSpeech('12 euro bakker, 8 euro apotheek', { today: T }).length, 2);
 });
+
+test('kommabedrag uit spraak blijft één bedrag', () => {
+  for (const t of ['85,25 euro tanken', '85, 25 euro tanken', '85 komma 25 euro tanken', 'vijfentachtig komma vijfentwintig euro tanken', '85,25']) {
+    const r = parseSpeech(t, { today: T });
+    assert.equal(r.length, 1, t);
+    assert.equal(r[0].amount_cents, 8525, t);
+  }
+  assert.equal(parseSpeech('85, 5 euro tanken', { today: T })[0].amount_cents, 8550);
+  assert.deepEqual(parseSpeech('tanken 85, bakker 12', { today: T }).map((x) => x.amount_cents), [8500, 1200]);
+});

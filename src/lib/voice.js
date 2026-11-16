@@ -38,9 +38,17 @@ export function wordToNumber(w) {
   return null;
 }
 
+// Spraak schrijft een kommagetal soms als "85, 25" of "85 komma 25". Maak er "85,25" van.
+export function joinDecimals(text) {
+  return text
+    .replace(/(\d)\s*(?:komma|punt)\s*(\d{1,2})(?!\d)/gi, '$1,$2')
+    .replace(/(\d),\s+(\d{2})(?![\d,.])(?!\s*(?:uur|u\b))/g, '$1,$2')
+    .replace(/(\d),\s+(\d)(?![\d,.])(?=\s*(?:euro|eur|€))/gi, '$1,$2');
+}
+
 // Zet getallen in woorden om naar cijfers: "vijfentwintig euro vijftig" -> "25 euro 50".
 export function digitize(text) {
-  return text
+  return joinDecimals(text)
     .split(/(\s+)/)
     .map((tok) => {
       const n = wordToNumber(tok);
@@ -48,7 +56,8 @@ export function digitize(text) {
     })
     .join('')
     .replace(/\banderhalve?\b/g, '1,5')
-    .replace(/\bhalve\b/g, '0,5');
+    .replace(/\bhalve\b/g, '0,5')
+    .replace(/(\d)\s*(?:komma|punt)\s*(\d{1,2})(?!\d)/gi, '$1,$2');
 }
 
 // ───────────── Bedrag ─────────────
@@ -223,7 +232,7 @@ export function parseOne(raw, { today = todayISO(), allowZaak = true } = {}) {
 
 // Een zin kan meerdere boekingen bevatten: "25 euro tanken en 12 euro bij de bakker".
 export function parseSpeech(raw, opts = {}) {
-  const text = String(raw || '').trim();
+  const text = joinDecimals(digitize(String(raw || '').trim()));
   if (!text) return [];
   const parts = text
     .split(/\s*(?:,(?!\d)|(?<!\d),|;|\ben daarna\b|\ben ook\b|\ben\b|\bplus\b)\s*(?=(?:[^\s]+\s+){0,3}?(?:€\s*)?\d|(?:[^\s]+\s+){0,3}?[a-zë]+(?:en)?(?:twintig|dertig|veertig|vijftig|zestig|zeventig|tachtig|negentig|honderd|duizend|tien|twaalf|elf)\b)/i)
