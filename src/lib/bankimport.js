@@ -197,14 +197,14 @@ const dayDiff = (a, b) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(
 // Ook twee keer hetzelfde bestand (of twee bestanden die elkaar overlappen) geeft zo geen dubbels.
 export function markDuplicates(rows, existing) {
   const left = existing.map((e) => ({ ...e, used: false }));
-  const dup = new Set();
+  const dup = new Map();
   const maybe = new Map();
   // Eerst de rijen die we zouden importeren, zodat cash of eigen overschrijvingen geen match "opgebruiken".
   const order = rows.map((r, i) => i).sort((a, b) => Number(Boolean(rows[a].own || rows[a].cash)) - Number(Boolean(rows[b].own || rows[b].cash)));
   for (const i of order) {
     const r = rows[i];
     const e = left.find((x) => !x.used && x.date === r.date && x.amount_cents === r.amount_cents && x.type === r.type);
-    if (e) { e.used = true; dup.add(i); }
+    if (e) { e.used = true; dup.set(i, e.note || ''); }
   }
   for (const i of order) {
     if (dup.has(i)) continue;
@@ -221,5 +221,5 @@ export function markDuplicates(rows, existing) {
     }
     if (best) { best.x.used = true; maybe.set(i, { date: best.x.date, note: best.x.note || '' }); }
   }
-  return rows.map((r, i) => ({ ...r, dup: dup.has(i), maybe: maybe.get(i) || null }));
+  return rows.map((r, i) => ({ ...r, dup: dup.has(i), dupNote: dup.get(i) || '', maybe: maybe.get(i) || null }));
 }
