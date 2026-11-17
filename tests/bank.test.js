@@ -100,3 +100,13 @@ test('datum verschuiven over de maandgrens', () => {
   assert.equal(shiftDate('2026-03-01', -1), '2026-02-28');
   assert.equal(shiftDate('2026-12-31', 2), '2027-01-02');
 });
+
+test('dezelfde lijn twee keer in het bestand telt één keer, twee koffies met een ander saldo blijven', () => {
+  const head = 'Datum;Bedrag;Saldo na verrichting;Munt;Tegenpartij;Rekening tegenpartij;Type verrichting;Mededeling;Rekening opdrachtgever';
+  const ellen = '30/09/2026;1700.00;3200.00;EUR;Ellen Bogaert;BE11 1111 1111 1111;Overschrijving;Ons budget;BE00 0000 0000 0000';
+  const k1 = '29/09/2026;-2.50;1500.00;EUR;Koffiebar;;Betaling Bancontact;;BE00 0000 0000 0000';
+  const k2 = '29/09/2026;-2.50;1497.50;EUR;Koffiebar;;Betaling Bancontact;;BE00 0000 0000 0000';
+  const { rows } = readBankCSV([head, ellen, k1, k2, head, ellen].join('\n'));
+  assert.equal(rows.filter((r) => r.amount_cents === 170000).length, 1);
+  assert.equal(rows.filter((r) => r.amount_cents === 250).length, 2);
+});

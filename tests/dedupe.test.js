@@ -15,9 +15,23 @@ test('twee keer hetzelfde afschrift: één blijft', () => {
   assert.equal(g[0].sure, true);
 });
 
-test('twee koffies in één import zijn echt', () => {
+test('twee koffies in één import: getoond, maar niet aangevinkt', () => {
   const g = findDuplicates([e('2026-11-16T10:00:00Z'), e('2026-11-16T10:00:00Z'), ...load('2026-11-16T10:00:00Z')]);
-  assert.equal(g.length, 0);
+  assert.equal(g.length, 1);
+  assert.equal(g[0].sure, false);
+  assert.equal(g[0].sameLoad, true);
+  assert.equal(g[0].remove.length, 1);
+});
+
+test('twee keer op importeren getikt (een paar seconden na elkaar): wel dubbel', () => {
+  const first = '2026-11-17T09:00:00.120Z', second = '2026-11-17T09:00:01.480Z';
+  const a = e(first, { type: 'in', amount_cents: 170000, note: 'Ellen Bogaert' });
+  const b = e(second, { type: 'in', amount_cents: 170000, note: 'Ellen Bogaert' });
+  const g = findDuplicates([a, b, ...load(first), ...load(second)]);
+  const ellen = g.find((x) => x.keep[0].note === 'Ellen Bogaert');
+  assert.deepEqual(ellen.keep.map((x) => x.id), [a.id]);
+  assert.deepEqual(ellen.remove.map((x) => x.id), [b.id]);
+  assert.equal(ellen.sure, true);
 });
 
 test('twee koffies, en het afschrift opnieuw: twee blijven, twee weg', () => {
