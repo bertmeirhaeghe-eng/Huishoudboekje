@@ -16,6 +16,7 @@ import Kitchen from './components/Kitchen.jsx';
 import Agenda, { saveEvent } from './components/Agenda.jsx';
 import TaxHelper from './components/TaxHelper.jsx';
 import BankImport from './components/BankImport.jsx';
+import Cleanup from './components/Cleanup.jsx';
 import Board from './components/Board.jsx';
 import { useHome } from './lib/useHome.js';
 import { budgetMonth, inPeriod } from './lib/stats.js';
@@ -161,9 +162,11 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'grafiek') {
     content = <Chart {...common} period={period} setPeriod={setPeriod} entries={bookEntries} months={months} earlyDays={earlyDays} />;
   } else if (screen === 'meer') {
-    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
+    content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenCleanup={() => go('dubbels')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
     content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(budgetMonth({ date, type: 'uit' })); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
+  } else if (screen === 'dubbels') {
+    content = <Cleanup household={household} onBack={() => go('meer')} onDone={async (n) => { await load(); go('meer'); toast(`${n} dubbels verwijderd`); }} />;
   } else if (screen === 'privezaak') {
     content = <TaxHelper onBack={() => go('meer')} onBook={(d) => { setDraft({ type: 'uit', date: todayISO(), ...d }); go('toevoegen'); }} />;
   } else if (screen === 'lijst') {

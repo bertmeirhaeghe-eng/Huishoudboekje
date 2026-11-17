@@ -71,6 +71,12 @@ export const demoStore = {
     d.entries = d.entries.filter((e) => e.id !== id);
     save(d);
   },
+  async deleteEntries(ids) {
+    const d = db();
+    const set = new Set(ids);
+    d.entries = d.entries.filter((e) => !set.has(e.id));
+    save(d);
+  },
   async listBudgets() { return db().budgets; },
   async setBudget(hid, book, category, cents) {
     const d = db();
