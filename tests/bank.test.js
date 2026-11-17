@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readBankCSV, markDuplicates, parseBankAmount, cleanName } from '../src/lib/bankimport.js';
+import { readBankCSV, markDuplicates, shiftDate, parseBankAmount, cleanName } from '../src/lib/bankimport.js';
 
 // Verzonnen voorbeeld in het formaat van een Crelan-export.
 const CRELAN = `Datum;Bedrag;Saldo na verrichting;Munt;Tegenpartij;Rekening tegenpartij;Type verrichting;Mededeling;Rekening opdrachtgever
@@ -61,4 +61,42 @@ test('onbekend bestand geeft uitleg', () => {
 test('cash gebruikt geen dubbel-match op', () => {
   const rows = [{ date: 'd', amount_cents: 800, type: 'in', cash: true }, { date: 'd', amount_cents: 800, type: 'in' }];
   assert.deepEqual(markDuplicates(rows, [{ date: 'd', amount_cents: 800, type: 'in' }]).map((x) => x.dup), [false, true]);
+});
+
+test('opnieuw hetzelfde bestand importeren geeft geen dubbels', () => {
+  const { rows } = readBankCSV(CRELAN, { ownNames: ['Jan Peeters'] });
+  const first = markDuplicates(rows, []).filter((r) => !r.own && !r.cash);
+  const saved = first.map((r) => ({ date: r.date, amount_cents: r.amount_cents, type: r.type, note: r.note }));
+  const again = markDuplicates(rows, saved);
+  assert.equal(again.filter((r) => !r.dup && !r.maybe && !r.own && !r.cash).length, 0);
+});
+
+test('zelf ingesproken boeking een paar dagen eerder: staat er misschien al', () => {
+  const rows = [{ date: '2026-01-05', amount_cents: 5712, type: 'uit', note: 'CRF MKT GENT' }];
+  const r = markDuplicates(rows, [{ date: '2026-01-03', amount_cents: 5712, type: 'uit', note: 'boodschappen' }]);
+  assert.equal(r[0].dup, false);
+  assert.deepEqual(r[0].maybe, { date: '2026-01-03', note: 'boodschappen' });
+});
+
+test('te ver uit elkaar of ander bedrag: gewoon nieuw', () => {
+  const rows = [{ date: '2026-01-15', amount_cents: 5712, type: 'uit', note: 'X' }, { date: '2026-01-05', amount_cents: 5713, type: 'uit', note: 'Y' }];
+  const r = markDuplicates(rows, [{ date: '2026-01-03', amount_cents: 5712, type: 'uit', note: 'z' }]);
+  assert.deepEqual(r.map((x) => [x.dup, x.maybe]), [[false, null], [false, null]]);
+});
+
+test('elke dag hetzelfde brood is geen dubbel', () => {
+  const rows = [{ date: '2026-01-06', amount_cents: 240, type: 'uit', note: 'Bakkerij Jan' }];
+  const r = markDuplicates(rows, [{ date: '2026-01-05', amount_cents: 240, type: 'uit', note: 'Bakkerij Jan' }]);
+  assert.equal(r[0].maybe, null);
+});
+
+test('één ingegeven boeking telt maar voor één bankregel', () => {
+  const rows = [{ date: '2026-01-05', amount_cents: 1000, type: 'uit', note: 'A' }, { date: '2026-01-06', amount_cents: 1000, type: 'uit', note: 'B' }];
+  const r = markDuplicates(rows, [{ date: '2026-01-05', amount_cents: 1000, type: 'uit', note: 'zelf' }]);
+  assert.deepEqual(r.map((x) => [x.dup, Boolean(x.maybe)]), [[true, false], [false, false]]);
+});
+
+test('datum verschuiven over de maandgrens', () => {
+  assert.equal(shiftDate('2026-03-01', -1), '2026-02-28');
+  assert.equal(shiftDate('2026-12-31', 2), '2027-01-02');
 });
