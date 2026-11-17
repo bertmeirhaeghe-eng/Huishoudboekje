@@ -53,7 +53,14 @@ export function createSupabaseStore(url, anonKey) {
     },
 
     async listEntries(hid, from, to) {
-      return must(await sb.from('entries').select('*').eq('household_id', hid).gte('date', from).lte('date', to).order('date', { ascending: false }));
+      // Supabase geeft per keer hoogstens 1000 rijen terug: daarom in stukken ophalen.
+      const out = [];
+      for (let i = 0; ; i += 1000) {
+        const part = must(await sb.from('entries').select('*').eq('household_id', hid).gte('date', from).lte('date', to)
+          .order('date', { ascending: false }).order('id').range(i, i + 999));
+        out.push(...part);
+        if (part.length < 1000) return out;
+      }
     },
     async addEntry(entry) {
       return must(await sb.from('entries').insert(entry).select().single());
@@ -65,6 +72,9 @@ export function createSupabaseStore(url, anonKey) {
     },
     async deleteEntry(id) {
       must(await sb.from('entries').delete().eq('id', id));
+    },
+    async deleteEntries(ids) {
+      for (let i = 0; i < ids.length; i += 200) must(await sb.from('entries').delete().in('id', ids.slice(i, i + 200)));
     },
     async listBudgets(hid) {
       return must(await sb.from('budgets').select('*').eq('household_id', hid));

@@ -10,7 +10,7 @@ import { forgetPhotos } from '../lib/photos.js';
 import { setStartsOnBoard, startsOnBoard } from '../lib/prefs.js';
 import { canPrompt, isApple, isInstalled, onInstallChange, promptInstall } from '../lib/install.js';
 
-export default function Settings({ household, onChange, onOpenTax, onOpenImport, onOpenBoard, earlyDays = 3, setEarlyDays }) {
+export default function Settings({ household, onChange, onOpenTax, onOpenImport, onOpenCleanup, onOpenBoard, earlyDays = 3, setEarlyDays }) {
   const [msg, setMsg] = useState('');
   const isOwner = household.role === 'eigenaar';
 
@@ -74,6 +74,14 @@ export default function Settings({ household, onChange, onOpenTax, onOpenImport,
         <button className="card tile-wide" onClick={onOpenImport}>
           <span className="tile-ico green"><Icon name="download" size={20} /></span>
           <span className="grow" style={{ textAlign: 'left' }}><b style={{ display: 'block' }}>Bankafschrift importeren</b><span className="tiny muted">CSV van Crelan of een andere bank</span></span>
+          <Icon name="next" size={18} />
+        </button>
+      )}
+
+      {onOpenCleanup && (
+        <button className="card tile-wide" onClick={onOpenCleanup}>
+          <span className="tile-ico green"><Icon name="check" size={20} /></span>
+          <span className="grow" style={{ textAlign: 'left' }}><b style={{ display: 'block' }}>Dubbels opruimen</b><span className="tiny muted">Boekingen die er twee keer in staan</span></span>
           <Icon name="next" size={18} />
         </button>
       )}
