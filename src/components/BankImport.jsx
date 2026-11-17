@@ -35,7 +35,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
       const r = readBankCSV(text, { ownNames: own });
       const dates = r.rows.map((x) => x.date).sort();
       const existing = (await store.listEntries(household.id, shiftDate(dates[0], -NEAR_BEFORE), shiftDate(dates[dates.length - 1], NEAR_AFTER))).filter((e) => e.book === b);
-      const marked = markDuplicates(r.rows, existing).map((x, i) => ({ ...x, i, on: !x.dup && !x.maybe && !x.own && !x.cash, category: b === 'zaak' ? (x.type === 'in' ? 'andere_zaak_in' : 'andere_zaak') : x.category }));
+      const marked = markDuplicates(r.rows, existing).map((x, i) => ({ ...x, i, on: !x.dup && !x.maybe, category: b === 'zaak' ? (x.type === 'in' ? 'andere_zaak_in' : 'andere_zaak') : x.category }));
       setBank(r.bank);
       setRows(marked);
       setShow(PAGE);
@@ -105,7 +105,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
       )}
 
       <label className="field">
-        Overschrijvingen tussen jullie eigen rekeningen overslaan <span className="tiny muted" style={{ fontWeight: 400 }}>namen, gescheiden door een komma</span>
+        Overschrijvingen tussen jullie eigen rekeningen herkennen <span className="tiny muted" style={{ fontWeight: 400 }}>namen, gescheiden door een komma</span>
         <input className="input" value={names} onChange={(e) => setNames(e.target.value)} onBlur={() => { try { localStorage.setItem(NAMES_KEY, names); } catch {} if (file) read(file, book, names); }} placeholder="bv. Jan Peeters, An Janssens" />
       </label>
 
@@ -117,7 +117,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
             <div className="spread"><b>{bank} · {file?.name}</b><button className="tiny bold link" onClick={() => { setRows(null); setFile(null); }}>Ander bestand</button></div>
             <div className="spread small"><span>Nieuwe boekingen</span><b>{chosen.length}</b></div>
             <div className="spread small"><span>In / uit</span><b><span style={{ color: 'var(--green)' }}>+ {money(sumIn)}</span> / − {money(sumOut)}</b></div>
-            <div className="spread small muted"><span>Overgeslagen (staat er al of misschien al, eigen overschrijving of cash)</span><span>{skipped.length}</span></div>
+            <div className="spread small muted"><span>Overgeslagen (staat er al of misschien al)</span><span>{skipped.length}</span></div>
           </section>
 
           <div className="seg" role="group" aria-label="Tonen">
@@ -144,7 +144,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
 
 function ImportRow({ r, book, onToggle, onCat }) {
   const cats = categoriesFor(book, r.type);
-  const why = r.dup ? 'staat er al' : r.maybe ? `staat er misschien al: ${r.maybe.note ? `"${r.maybe.note}" ` : ''}op ${dayLabel(r.maybe.date)}` : r.own ? 'eigen overschrijving' : r.cash ? 'cash' : null;
+  const why = r.dup ? `staat er al${r.dupNote && r.dupNote !== r.note ? `: "${r.dupNote}"` : ''}` : r.maybe ? `staat er misschien al: ${r.maybe.note ? `"${r.maybe.note}" ` : ''}op ${dayLabel(r.maybe.date)}` : r.own ? 'eigen overschrijving' : r.cash ? 'cash' : null;
   return (
     <div className="import-row">
       <button className="check" role="checkbox" aria-checked={r.on} onClick={onToggle} aria-label={r.note} style={{ flex: '0 0 auto', minHeight: 44, padding: 0 }}>
@@ -157,7 +157,7 @@ function ImportRow({ r, book, onToggle, onCat }) {
           <span className={'amt' + (r.type === 'in' ? ' in' : '')}>{r.type === 'in' ? '+ ' : '− '}{money(r.amount_cents)}</span>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <span className="tiny muted" style={{ whiteSpace: r.maybe ? 'normal' : 'nowrap' }}>{dayLabel(r.date)}{why ? ` · ${why}` : ''}</span>
+          <span className="tiny muted" style={{ whiteSpace: r.maybe || r.dup ? 'normal' : 'nowrap' }}>{dayLabel(r.date)}{why ? ` · ${why}` : ''}</span>
           <select className="cat-select" value={cats.some((c) => c.id === r.category) ? r.category : cats[cats.length - 1].id} onChange={(e) => onCat(e.target.value)} aria-label="Categorie">
             {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
