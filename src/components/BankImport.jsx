@@ -25,6 +25,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
   const [show, setShow] = useState(PAGE);
   const [tab, setTab] = useState('nieuw');
   const input = useRef(null);
+  const saving = useRef(false); // twee keer snel tikken mag niet twee keer importeren
 
   async function read(f, b = book, n = names) {
     setError('');
@@ -63,6 +64,8 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
   const sumOut = chosen.filter((r) => r.type === 'uit').reduce((a, r) => a + r.amount_cents, 0);
 
   async function save() {
+    if (saving.current) return;
+    saving.current = true;
     setBusy(true);
     setError('');
     try {
@@ -71,6 +74,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
     } catch (e) {
       setError(e.message);
       setBusy(false);
+      saving.current = false;
     }
   }
 

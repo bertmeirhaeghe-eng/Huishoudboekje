@@ -42,6 +42,7 @@ const COLS = {
   name: ['tegenpartij', 'naam tegenpartij', 'naam van de tegenpartij', 'naam tegenpartij bevat', 'naam / omschrijving', 'begunstigde', 'counterparty'],
   account: ['rekening tegenpartij', 'rekening van de tegenpartij', 'rekeningnummer tegenpartij', 'tegenrekening'],
   type: ['type verrichting', 'type', 'omschrijving verrichting', 'transactietype'],
+  saldo: ['saldo na verrichting', 'saldo'],
   note: ['mededeling', 'mededelingen', 'vrije mededeling', 'omschrijving', 'details', 'description'],
 };
 
@@ -147,7 +148,15 @@ export function readBankCSV(text, { ownNames = [] } = {}) {
   const own = ownNames.map(norm).filter((x) => x.length >= 3);
 
   const rows = [];
+  const seen = new Set();
   for (const r of table.slice(hi + 1)) {
+    // Staat exact dezelfde lijn (met hetzelfde saldo erna) twee keer in het bestand? Dan is het een dubbele lijn.
+    // Twee echte koffies hebben elk een ander saldo erna, die blijven allebei.
+    if (c.saldo >= 0 && r[c.saldo]?.trim()) {
+      const line = r.map((x) => x.trim()).join('|');
+      if (seen.has(line)) continue;
+      seen.add(line);
+    }
     const date = parseBankDate(r[c.date]);
     const cents = parseBankAmount(r[c.amount]);
     if (!date || !cents) continue;

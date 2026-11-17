@@ -62,7 +62,8 @@ export const demoStore = {
   },
   async addEntries(list) {
     const d = db();
-    for (const entry of list) d.entries.push({ ...entry, id: uid(), created_by: d.user.id, created_at: new Date().toISOString() });
+    const at = new Date().toISOString(); // één import, één tijdstip (zoals in de database)
+    for (const entry of list) d.entries.push({ ...entry, id: uid(), created_by: d.user.id, created_at: at });
     save(d);
     return list.length;
   },

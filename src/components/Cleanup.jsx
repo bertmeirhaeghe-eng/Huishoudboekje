@@ -29,7 +29,9 @@ export default function Cleanup({ household, onBack, onDone }) {
   const chosen = useMemo(() => (groups || []).filter((g) => on[g.key]), [groups, on]);
   const ids = chosen.flatMap((g) => g.remove.map((e) => e.id));
   const sum = chosen.reduce((a, g) => a + g.remove.length * g.keep[0].amount_cents * (g.keep[0].type === 'in' ? 1 : -1), 0);
-  const unsure = (groups || []).filter((g) => !g.sure).length;
+  const unsure = (groups || []).filter((g) => !g.sure && !g.sameLoad).length;
+  const same = (groups || []).filter((g) => g.sameLoad);
+  const allSame = same.length > 0 && same.every((g) => on[g.key]);
 
   async function remove() {
     setBusy(true);
@@ -51,7 +53,7 @@ export default function Cleanup({ household, onBack, onDone }) {
         <h1>Dubbels opruimen</h1>
       </div>
 
-      <span className="small muted">Twee boekingen met dezelfde dag, hetzelfde bedrag en dezelfde omschrijving in hetzelfde boekje, die op een ander moment in het boekje kwamen, tellen als dubbel. Eén ervan blijft altijd staan. Twee keer hetzelfde op één afschrift (bv. twee koffies) blijft gewoon staan.</span>
+      <span className="small muted">Twee boekingen met dezelfde dag, hetzelfde bedrag en dezelfde omschrijving in hetzelfde boekje, die op een ander moment in het boekje kwamen, tellen als dubbel. Eén ervan blijft altijd staan. Kwam iets twee keer binnen met één en dezelfde import, dan staat het hier ook, maar niet aangevinkt: dat kunnen echt twee koffies zijn.</span>
 
       {error && <div className="error">{error}</div>}
       {!groups && !error && <div className="card small muted">Alle boekingen nakijken…</div>}
@@ -65,6 +67,14 @@ export default function Cleanup({ household, onBack, onDone }) {
             <div className="spread small"><span>Aangevinkt om te verwijderen</span><b>{ids.length}</b></div>
             <div className="spread small muted"><span>Effect op je saldo in het boekje</span><span>{sum >= 0 ? '− ' : '+ '}{money(Math.abs(sum))}</span></div>
             {unsure > 0 && <span className="tiny muted">{unsure} zelf of met je stem ingegeven: die staan niet aangevinkt, kijk ze even na.</span>}
+            {same.length > 0 && (
+              <>
+                <span className="tiny muted">{same.length === 1 ? '1 boeking kwam' : `${same.length} boekingen kwamen`} twee keer binnen met dezelfde import. Stond je bankbestand dubbel? Vink ze dan allemaal aan.</span>
+                <button className="btn ghost" onClick={() => setOn((o) => ({ ...o, ...Object.fromEntries(same.map((g) => [g.key, !allSame])) }))}>
+                  {allSame ? 'Die van dezelfde import weer uitvinken' : `Ook die ${same.length} van dezelfde import aanvinken`}
+                </button>
+              </>
+            )}
           </section>
 
           <div className="card list">
@@ -82,7 +92,7 @@ export default function Cleanup({ household, onBack, onDone }) {
                       <span className="bold ellipsis">{e.note || 'Zonder omschrijving'}</span>
                       <span className={'amt' + (e.type === 'in' ? ' in' : '')}>{e.type === 'in' ? '+ ' : '− '}{money(e.amount_cents)}</span>
                     </div>
-                    <span className="tiny muted">{dayLabel(e.date)}{e.book === 'zaak' ? ' · zaak' : ''} · staat er {total}×, {g.keep.length === 1 ? '1 blijft' : `${g.keep.length} blijven`}{g.sure ? '' : ' · zelf ingegeven, nakijken'}</span>
+                    <span className="tiny muted">{dayLabel(e.date)}{e.book === 'zaak' ? ' · zaak' : ''} · staat er {total}×, {g.keep.length === 1 ? '1 blijft' : `${g.keep.length} blijven`}{g.sure ? '' : g.sameLoad ? ' · zelfde import, nakijken' : ' · zelf ingegeven, nakijken'}</span>
                   </div>
                 </div>
               );
