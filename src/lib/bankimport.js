@@ -175,21 +175,51 @@ export function readBankCSV(text, { ownNames = [] } = {}) {
   return { bank, rows: rows.sort((a, b) => b.date.localeCompare(a.date)) };
 }
 
-// Welke rijen staan al in het boekje? Zelfde dag, bedrag en soort telt als dezelfde boeking.
+// Datum verschuiven: '2026-01-05' + 2 -> '2026-01-07'.
+export function shiftDate(iso, days) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Hoe ver een zelf ingetypte of ingesproken boeking van de bankdatum mag liggen.
+// De bank boekt een kaartbetaling vaak een paar dagen later (weekend, feestdag).
+export const NEAR_BEFORE = 5;
+export const NEAR_AFTER = 2;
+
+const dayDiff = (a, b) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86400000);
+
+// Welke rijen staan al in het boekje?
+// 1. Zelfde dag, bedrag en soort: staat er al (vorige import of zelf ingegeven). Niet aangevinkt.
+// 2. Zelfde bedrag en soort, maar een paar dagen ervoor of erna: staat er misschien al
+//    (bv. ingesproken op zaterdag, door de bank geboekt op maandag). Ook niet aangevinkt, met uitleg.
+// Elke bestaande boeking telt maar voor één rij.
+// Ook twee keer hetzelfde bestand (of twee bestanden die elkaar overlappen) geeft zo geen dubbels.
 export function markDuplicates(rows, existing) {
-  const pool = new Map();
-  for (const e of existing) {
-    const k = `${e.date}|${e.amount_cents}|${e.type}`;
-    pool.set(k, (pool.get(k) || 0) + 1);
-  }
+  const left = existing.map((e) => ({ ...e, used: false }));
   const dup = new Set();
+  const maybe = new Map();
   // Eerst de rijen die we zouden importeren, zodat cash of eigen overschrijvingen geen match "opgebruiken".
   const order = rows.map((r, i) => i).sort((a, b) => Number(Boolean(rows[a].own || rows[a].cash)) - Number(Boolean(rows[b].own || rows[b].cash)));
   for (const i of order) {
     const r = rows[i];
-    const k = `${r.date}|${r.amount_cents}|${r.type}`;
-    const n = pool.get(k) || 0;
-    if (n > 0) { pool.set(k, n - 1); dup.add(i); }
+    const e = left.find((x) => !x.used && x.date === r.date && x.amount_cents === r.amount_cents && x.type === r.type);
+    if (e) { e.used = true; dup.add(i); }
   }
-  return rows.map((r, i) => ({ ...r, dup: dup.has(i) }));
+  for (const i of order) {
+    if (dup.has(i)) continue;
+    const r = rows[i];
+    let best = null;
+    for (const x of left) {
+      if (x.used || x.amount_cents !== r.amount_cents || x.type !== r.type) continue;
+      // Exact dezelfde omschrijving op een andere dag is een eerder geïmporteerde, terugkerende aankoop
+      // (elke dag brood bij dezelfde bakker), geen dubbel.
+      if (r.note && x.note === r.note) continue;
+      const d = dayDiff(r.date, x.date); // > 0: zelf ingegeven vóór de bankdatum
+      if (d > NEAR_BEFORE || d < -NEAR_AFTER) continue;
+      if (!best || Math.abs(d) < Math.abs(best.d)) best = { x, d };
+    }
+    if (best) { best.x.used = true; maybe.set(i, { date: best.x.date, note: best.x.note || '' }); }
+  }
+  return rows.map((r, i) => ({ ...r, dup: dup.has(i), maybe: maybe.get(i) || null }));
 }
