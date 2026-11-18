@@ -6,11 +6,11 @@ import { useCountUp } from '../lib/anim.js';
 import { MonthBars, MonthSwitcher } from './Chart.jsx';
 import CategorySplit from './CategorySplit.jsx';
 import { analyze, changeLabel } from '../lib/insights.js';
-import { category } from '../lib/categories.js';
+import { categoriesFor, category } from '../lib/categories.js';
 import { dayLabel, longToday, monthKey, monthLabel, money, parseAmount, todayISO } from '../lib/format.js';
 import { budgetMonth, budgetRows, groupByDate, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, account = null, onSaveBalance, onDelete, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, account = null, onSaveBalance, onDelete, onChangeCategory, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
   const [kind, setKind] = useState('uit');
   const [catFilter, setCatFilter] = useState(null);
@@ -239,6 +239,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
           who={names[open.created_by]}
           onClose={() => setOpen(null)}
           onDelete={async () => { await onDelete(open.id); setOpen(null); }}
+          onChangeCategory={async (cat) => { await onChangeCategory(open.id, cat); setOpen(null); }}
         />
       )}
     </div>
@@ -287,15 +288,27 @@ function YearDetail({ series, entries, sum, year, onPickMonth, keyBase }) {
   );
 }
 
-function EntrySheet({ entry, who, onClose, onDelete }) {
+function EntrySheet({ entry, who, onClose, onDelete, onChangeCategory }) {
   const [confirm, setConfirm] = useState(false);
-  const c = category(entry.category);
+  const [cat, setCat] = useState(entry.category);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const c = category(cat);
+  const book = entry.book === 'zaak' ? 'zaak' : 'gezin';
+  const type = entry.type === 'in' ? 'in' : 'uit';
+  const cats = categoriesFor(book, type);
+  const changed = cat !== entry.category;
+  async function save() {
+    setBusy(true);
+    setError('');
+    try { await onChangeCategory(cat); } catch (e) { setError(e?.message || 'Bewaren lukte niet.'); setBusy(false); }
+  }
   return (
     <div className="backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Boeking" onClick={(e) => e.stopPropagation()}>
         <div className="spread">
           <div className="row">
-            <CatIcon id={entry.category} selected />
+            <CatIcon id={cat} selected />
             <div>
               <div className="bold">{entry.note || c.name}</div>
               <div className="tiny muted">{c.name} · {entry.book === 'zaak' ? 'Zaak' : 'Gezin'}</div>
@@ -307,6 +320,21 @@ function EntrySheet({ entry, who, onClose, onDelete }) {
           {entry.type === 'in' ? '+ ' : '− '}{money(entry.amount_cents)}
         </div>
         <div className="small muted" style={{ textAlign: 'center' }}>{dayLabel(entry.date)}{who ? `, toegevoegd door ${who}` : ''}</div>
+        <div className="stack" style={{ gap: 8 }}>
+          <span className="tiny bold muted">Categorie</span>
+          <div className="cats" role="group" aria-label="Categorie">
+            {cats.map((x) => (
+              <button key={x.id} className="cat" aria-pressed={cat === x.id} onClick={() => setCat(x.id)}>
+                <CatIcon id={x.id} selected={cat === x.id} />
+                {x.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        {error && <span className="small" style={{ color: 'var(--danger)', textAlign: 'center' }}>{error}</span>}
+        {changed && (
+          <button className={'btn' + (book === 'zaak' ? ' blue' : '')} disabled={busy} onClick={save}><Icon name="check" /> {busy ? 'Bewaren…' : `Bewaren als ${c.name}`}</button>
+        )}
         {!confirm ? (
           <button className="btn danger" onClick={() => setConfirm(true)}><Icon name="trash" /> Verwijderen</button>
         ) : (

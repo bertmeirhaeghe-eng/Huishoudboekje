@@ -74,6 +74,12 @@ export const demoStore = {
     save(d);
     return list.length;
   },
+  async updateEntry(id, patch) {
+    const d = db();
+    d.entries = d.entries.map((e) => (e.id === id ? { ...e, ...patch } : e));
+    save(d);
+    return d.entries.find((e) => e.id === id);
+  },
   async deleteEntry(id) {
     const d = db();
     d.entries = d.entries.filter((e) => e.id !== id);
