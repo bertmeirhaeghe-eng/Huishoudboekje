@@ -150,13 +150,18 @@ export function createSupabaseStore(url, anonKey) {
 
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
     subscribe(hid, fn, tables = ['entries', 'budgets']) {
-      let ch = sb.channel('boekje-' + tables.join('-') + '-' + hid);
+      // Elke keer een eigen kanaal: Supabase geeft bij dezelfde naam het bestaande (al gestarte) kanaal terug,
+      // en daar nog een luisteraar aan toevoegen laat de app crashen.
+      subs += 1;
+      let ch = sb.channel('boekje-' + tables.join('-') + '-' + hid + '-' + subs);
       for (const table of tables) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `household_id=eq.${hid}` }, fn);
       ch.subscribe();
       return () => sb.removeChannel(ch);
     },
   };
 }
+
+let subs = 0;
 
 const HOME_TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
 function check(table) {
