@@ -218,6 +218,7 @@ function Boekje({ household, onHouseholdChange }) {
         account={account}
         onSaveBalance={saveBalance}
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
+        onChangeCategory={async (id, cat) => { await store.updateEntry(id, { category: cat }); await load(); toast(`Categorie gewijzigd naar ${category(cat).name}`); }}
         onOpenChart={() => go('grafiek')}
         onOpenBudgets={() => go('budgetten')}
         onOpenInsights={() => go('inzichten')}

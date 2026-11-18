@@ -70,6 +70,9 @@ export function createSupabaseStore(url, anonKey) {
       for (let i = 0; i < list.length; i += 200) out.push(...must(await sb.from('entries').insert(list.slice(i, i + 200)).select('id')));
       return out.length;
     },
+    async updateEntry(id, patch) {
+      return must(await sb.from('entries').update(patch).eq('id', id).select().single());
+    },
     async deleteEntry(id) {
       must(await sb.from('entries').delete().eq('id', id));
     },
