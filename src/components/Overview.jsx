@@ -1,16 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { CoinStack, PiggyIllustration } from './Illustrations.jsx';
 import { useCountUp } from '../lib/anim.js';
 import { MonthBars, MonthSwitcher } from './Chart.jsx';
+import CategorySplit from './CategorySplit.jsx';
+import { analyze, changeLabel } from '../lib/insights.js';
 import { category } from '../lib/categories.js';
 import { dayLabel, longToday, monthLabel, money } from '../lib/format.js';
 import { budgetMonth, budgetRows, groupByDate, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
   const [kind, setKind] = useState('uit');
+  const [catFilter, setCatFilter] = useState(null);
+  useEffect(() => setCatFilter(null), [book, month, period]);
   const sum = useMemo(() => summarize(entries), [entries]);
   const jaar = period === 'jaar';
   const year = month.slice(0, 4);
@@ -19,7 +23,13 @@ export default function Overview({ household, isOwner, book, setBook, month, set
     const b = jaar ? Object.fromEntries(Object.entries(budgets).map(([k, v]) => [k, v * 12])) : budgets;
     return budgetRows(sum.byCategory, b).slice(0, 4);
   }, [sum, budgets, jaar]);
-  const groups = useMemo(() => groupByDate(entries.filter((e) => e.type === kind)), [entries, kind]);
+  const filterOn = !jaar && kind === 'uit' && catFilter;
+  const groups = useMemo(() => groupByDate(entries.filter((e) => e.type === kind && (!filterOn || e.category === catFilter))), [entries, kind, filterOn, catFilter]);
+  const cats = useMemo(() => totalsByCategory(entries, 'uit'), [entries]);
+  // Vergelijking met de maanden ervoor (in de maandweergave), en het opvallendste voor het inzichtenblok.
+  const insight = useMemo(() => (jaar ? null : analyze({ entries: chartEntries, scope: 'maand', month, earlyDays, today: month })), [jaar, chartEntries, month, earlyDays]);
+  const compare = insight?.hasBase ? Object.fromEntries(insight.rows.map((r) => [r.id, changeLabel(r)])) : null;
+  const teaser = insight?.outliers.find((o) => o.kind === 'hoger' || o.kind === 'groot') || insight?.outliers[0];
   const series = useMemo(() => perMonth(chartEntries, months, earlyDays), [chartEntries, months, earlyDays]);
   const names = Object.fromEntries(household.members.map((m) => [m.user_id, m.display_name]));
 
@@ -84,6 +94,17 @@ export default function Overview({ household, isOwner, book, setBook, month, set
             </button>
           )}
 
+          {onOpenInsights && (
+            <button className="insight-teaser" onClick={onOpenInsights}>
+              <span className="tile-ico"><Icon name="sparkle" size={20} /></span>
+              <span className="grow">
+                <b style={{ display: 'block' }}>Inzichten</b>
+                <span className="tiny">{teaser ? `Opvallend: ${teaser.title}` : 'Grafieken, uitschieters en tips'}</span>
+              </span>
+              <Icon name="next" size={18} />
+            </button>
+          )}
+
           <button className="card" onClick={onOpenChart} style={{ border: 0, textAlign: 'left' }} aria-label="Grafiek openen">
             <div className="spread" style={{ marginBottom: 8 }}>
               <h2>{jaar ? `Per maand in ${year}` : 'Laatste 6 maanden'}</h2>
@@ -91,6 +112,22 @@ export default function Overview({ household, isOwner, book, setBook, month, set
             </div>
             <MonthBars series={series} compact />
           </button>
+
+          <section className="stack" style={{ gap: 10 }}>
+            <div className="spread">
+              <h2>Uitgaven per categorie</h2>
+              {!jaar && cats.length > 0 && <span className="tiny muted">Tik om te filteren</span>}
+            </div>
+            <CategorySplit
+              key={book + period + month}
+              totals={cats}
+              total={sum.expense}
+              picked={filterOn ? catFilter : null}
+              onPick={jaar ? null : (id) => { setCatFilter(id); setKind('uit'); }}
+              compare={compare}
+              emptyText={jaar ? `Nog geen uitgaven in ${year}.` : 'Nog geen uitgaven deze maand.'}
+            />
+          </section>
 
           <section className="stack" style={{ gap: 10 }}>
             <div className="spread">
@@ -115,7 +152,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         </div>
 
         {jaar ? (
-          <YearDetail series={series} entries={entries} sum={sum} kind={kind} setKind={setKind} year={year} onPickMonth={(m) => { setMonth(m); setPeriod('maand'); }} keyBase={book + month} />
+          <YearDetail series={series} entries={entries} sum={sum} year={year} onPickMonth={(m) => { setMonth(m); setPeriod('maand'); }} keyBase={book + month} />
         ) : (
         <section className="stack" style={{ gap: 10 }}>
           <h2>Boekingen</h2>
@@ -123,6 +160,12 @@ export default function Overview({ household, isOwner, book, setBook, month, set
             <button aria-pressed={kind === 'uit'} onClick={() => setKind('uit')}>Uitgaven · {money(sum.expense, { round: true })}</button>
             <button aria-pressed={kind === 'in'} onClick={() => setKind('in')}>Inkomsten · {money(sum.income, { round: true })}</button>
           </div>
+          {filterOn && (
+            <span className="pill on filter-chip">
+              <CatIcon id={catFilter} size={14} /> Alleen {category(catFilter).name.toLowerCase()} · {money(sum.byCategory[catFilter] || 0, { round: true })}
+              <button onClick={() => setCatFilter(null)} aria-label="Filter wissen"><Icon name="close" size={16} /></button>
+            </span>
+          )}
           {groups.length === 0 && entries.length > 0 && (
             <div className="card small muted">{kind === 'in' ? 'Nog geen inkomsten deze maand.' : 'Nog geen uitgaven deze maand.'}</div>
           )}
@@ -133,7 +176,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               <span className="small muted">Tik op de microfoon en zeg bv. “25 euro tanken”, of tik op de plus.</span>
             </div>
           )}
-          <div className="stack stagger" style={{ gap: 10 }} key={book + month + kind}>
+          <div className="stack stagger" style={{ gap: 10 }} key={book + month + kind + (filterOn ? catFilter : '')}>
           {groups.map((g) => (
             <div key={g.date} className="stack" style={{ gap: 6 }}>
               <span className="tiny bold muted" style={{ paddingLeft: 4 }}>{dayLabel(g.date)}</span>
@@ -173,9 +216,10 @@ export default function Overview({ household, isOwner, book, setBook, month, set
 }
 
 // Rechterkolom van het jaaroverzicht: elke maand op een rij, en waar het geld naartoe ging of vandaan kwam.
-function YearDetail({ series, entries, sum, kind, setKind, year, onPickMonth, keyBase }) {
-  const cats = useMemo(() => totalsByCategory(entries, kind), [entries, kind]);
-  const total = kind === 'in' ? sum.income : sum.expense;
+function YearDetail({ series, entries, sum, year, onPickMonth, keyBase }) {
+  const kind = 'in';
+  const cats = useMemo(() => totalsByCategory(entries, kind), [entries]);
+  const total = sum.income;
   const max = cats.length ? cats[0][1] : 1;
   return (
     <section className="stack" style={{ gap: 10 }}>
@@ -196,13 +240,9 @@ function YearDetail({ series, entries, sum, kind, setKind, year, onPickMonth, ke
           );
         })}
       </div>
-      <h2>Per categorie</h2>
-      <div className="seg" role="group" aria-label="Soort">
-        <button aria-pressed={kind === 'uit'} onClick={() => setKind('uit')}>Uitgaven · {money(sum.expense, { round: true })}</button>
-        <button aria-pressed={kind === 'in'} onClick={() => setKind('in')}>Inkomsten · {money(sum.income, { round: true })}</button>
-      </div>
+      <h2>Inkomsten per categorie</h2>
       <div className="card stack stagger" style={{ gap: 12 }} key={kind + keyBase}>
-        {cats.length === 0 && <span className="small muted">{kind === 'in' ? `Nog geen inkomsten in ${year}.` : `Nog geen uitgaven in ${year}.`}</span>}
+        {cats.length === 0 && <span className="small muted">{`Nog geen inkomsten in ${year}.`}</span>}
         {cats.map(([id, v]) => (
           <div key={id}>
             <div className="spread small" style={{ marginBottom: 6 }}>

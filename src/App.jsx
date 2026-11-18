@@ -18,6 +18,7 @@ import TaxHelper from './components/TaxHelper.jsx';
 import BankImport from './components/BankImport.jsx';
 import Cleanup from './components/Cleanup.jsx';
 import Board from './components/Board.jsx';
+import Insights from './components/Insights.jsx';
 import { useHome } from './lib/useHome.js';
 import { budgetMonth, inPeriod } from './lib/stats.js';
 import { getEarlyDays, setEarlyDays as saveEarlyDays } from './lib/prefs.js';
@@ -161,6 +162,8 @@ function Boekje({ household, onHouseholdChange }) {
     content = <Budgets {...common} budgets={bookBudgets} entries={monthEntries} onChange={load} />;
   } else if (screen === 'grafiek') {
     content = <Chart {...common} period={period} setPeriod={setPeriod} entries={bookEntries} months={months} earlyDays={earlyDays} />;
+  } else if (screen === 'inzichten') {
+    content = <Insights {...common} isOwner={isOwner} setBook={setBook} earlyDays={earlyDays} budgets={bookBudgets} onBack={() => go('overzicht')} onOpenKitchen={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }} />;
   } else if (screen === 'meer') {
     content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenCleanup={() => go('dubbels')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
@@ -191,6 +194,7 @@ function Boekje({ household, onHouseholdChange }) {
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
         onOpenChart={() => go('grafiek')}
         onOpenBudgets={() => go('budgetten')}
+        onOpenInsights={() => go('inzichten')}
         today={{ meal: mealFor(home.menu, todayISO(), 'avond'), shopping: home.shopping.filter((x) => !x.done).length, low: home.pantry.filter((p) => p.status !== 'ok').length }}
         onOpenList={() => { setListTab('boodschappen'); go('lijst'); }}
         onOpenMenu={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }}
@@ -244,7 +248,7 @@ function Boekje({ household, onHouseholdChange }) {
   );
 }
 
-const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen'];
+const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen', 'inzichten'];
 
 function NavBtn({ icon, label, on, onClick, badge, className }) {
   return (
