@@ -10,7 +10,7 @@ import { money, monthKey, monthLabel, monthShortLabel, shiftMonth } from '../lib
 const SCOPES = [['maand', 'Maand'], ['jaar', 'Jaar'], ['alles', 'Alle jaren']];
 
 // Het inzichtenscherm: grafieken, wat opvalt en tips, per maand, per jaar of over de jaren heen.
-export default function Insights({ household, isOwner, book, setBook, month, setMonth, earlyDays = 0, budgets = {}, onBack, onOpenKitchen }) {
+export default function Insights({ refresh, household, isOwner, book, setBook, month, setMonth, earlyDays = 0, budgets = {}, onBack, onOpenKitchen }) {
   const [scope, setScope] = useState('maand');
   const [all, setAll] = useState(null);
   const [error, setError] = useState('');
@@ -21,9 +21,9 @@ export default function Insights({ household, isOwner, book, setBook, month, set
       .then((e) => { if (live) { setAll(e); setError(''); } })
       .catch((err) => live && setError(err.message));
     load();
-    const off = store.subscribe(household.id, load);
-    return () => { live = false; off && off(); };
-  }, [household.id]);
+    return () => { live = false; };
+    // Herladen wanneer het overzicht nieuwe boekingen binnenkreeg (refresh verandert dan).
+  }, [household.id, refresh]);
 
   const entries = useMemo(() => (all || []).filter((e) => e.book === book), [all, book]);
   const a = useMemo(() => analyze({ entries, scope, month, earlyDays, budgets, book }), [entries, scope, month, earlyDays, budgets, book]);

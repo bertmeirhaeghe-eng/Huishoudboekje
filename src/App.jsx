@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { store } from './lib/store.js';
 import { monthKey, monthRange, shiftMonth, yearMonths } from './lib/format.js';
 import Icon from './components/Icon.jsx';
@@ -163,7 +163,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'grafiek') {
     content = <Chart {...common} period={period} setPeriod={setPeriod} entries={bookEntries} months={months} earlyDays={earlyDays} />;
   } else if (screen === 'inzichten') {
-    content = <Insights {...common} isOwner={isOwner} setBook={setBook} earlyDays={earlyDays} budgets={bookBudgets} onBack={() => go('overzicht')} onOpenKitchen={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }} />;
+    content = <Insights refresh={entries} {...common} isOwner={isOwner} setBook={setBook} earlyDays={earlyDays} budgets={bookBudgets} onBack={() => go('overzicht')} onOpenKitchen={() => { setKitchenTab('menu'); setOpenRecipe(null); go('keuken'); }} />;
   } else if (screen === 'meer') {
     content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenCleanup={() => go('dubbels')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
@@ -230,7 +230,7 @@ function Boekje({ household, onHouseholdChange }) {
         )}
         {error && <div className="error" style={{ marginBottom: 14 }}>{error}</div>}
         {home.error && !error && ['lijst', 'keuken', 'agenda', 'overzicht'].includes(screen) && <div className="error" style={{ marginBottom: 14 }}>{home.error}</div>}
-        <div className="screen" key={screen}>{content}</div>
+        <div className="screen" key={screen}><Guard key={screen} onBack={() => go('overzicht')}>{content}</Guard></div>
       </main>
       {screen === 'spraak' && (
         <Voice
@@ -246,6 +246,22 @@ function Boekje({ household, onHouseholdChange }) {
       {party && <Celebrate key={party.id} text={party.text} onDone={() => setParty(null)} />}
     </div>
   );
+}
+
+// Loopt er iets mis in een scherm, dan tonen we een melding in plaats van een wit scherm.
+class Guard extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card stack" style={{ gap: 10 }}>
+        <b>Oei, dit scherm lukt even niet.</b>
+        <span className="small muted">{String(this.state.error?.message || this.state.error)}</span>
+        <button className="btn" onClick={this.props.onBack}>Terug naar het overzicht</button>
+      </div>
+    );
+  }
 }
 
 const MONEY = ['overzicht', 'grafiek', 'budgetten', 'toevoegen', 'inzichten'];
