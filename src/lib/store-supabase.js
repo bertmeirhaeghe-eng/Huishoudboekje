@@ -86,6 +86,19 @@ export function createSupabaseStore(url, anonKey) {
         must(await sb.from('budgets').delete().eq('household_id', hid).eq('book', book).eq('category', category));
       }
     },
+    // De echte rekeningstand per boekje. Bestaat de tabel nog niet (schema.sql nog niet opnieuw uitgevoerd),
+    // dan bewaart de app de stand voorlopig op dit toestel.
+    async listBalances(hid) {
+      const { data, error } = await sb.from('balances').select('*').eq('household_id', hid);
+      if (error) { if (missingTable(error)) return localBalances(hid); throw new Error(error.message); }
+      return data;
+    },
+    async setBalance(hid, book, asOf, cents) {
+      const row = { household_id: hid, book, as_of: asOf, amount_cents: cents, updated_at: new Date().toISOString() };
+      const { error } = await sb.from('balances').upsert(row);
+      if (error) { if (missingTable(error)) return saveLocalBalance(row); throw new Error(error.message); }
+      return 'db';
+    },
     // Thuis (stap 4): boodschappen, voorraad, recepten, weekmenu.
     async listRows(table, hid) {
       check(table);
@@ -162,6 +175,19 @@ export function createSupabaseStore(url, anonKey) {
 }
 
 let subs = 0;
+
+const missingTable = (e) => e.code === '42P01' || e.code === 'PGRST205' || /balances/.test(e.message || '') && /(exist|schema cache|find)/i.test(e.message || '');
+const BAL_KEY = 'boekje-rekeningstand';
+function localBalances(hid) {
+  try { return (JSON.parse(localStorage.getItem(BAL_KEY) || '[]') || []).filter((b) => b.household_id === hid); } catch { return []; }
+}
+function saveLocalBalance(row) {
+  try {
+    const all = (JSON.parse(localStorage.getItem(BAL_KEY) || '[]') || []).filter((b) => !(b.household_id === row.household_id && b.book === row.book));
+    localStorage.setItem(BAL_KEY, JSON.stringify([...all, row]));
+  } catch {}
+  return 'toestel';
+}
 
 const HOME_TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
 function check(table) {

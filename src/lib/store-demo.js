@@ -50,6 +50,13 @@ export const demoStore = {
     d.household.members[0].display_name = name;
     save(d);
   },
+  async listBalances() { return db().balances || []; },
+  async setBalance(hid, book, asOf, cents) {
+    const d = db();
+    d.balances = [...(d.balances || []).filter((b) => b.book !== book), { household_id: hid, book, as_of: asOf, amount_cents: cents, updated_at: new Date().toISOString() }];
+    save(d);
+    return 'db';
+  },
   async listEntries(_hid, from, to) {
     return db().entries.filter((e) => e.date >= from && e.date <= to);
   },

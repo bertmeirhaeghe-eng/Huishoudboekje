@@ -7,13 +7,14 @@ import { MonthBars, MonthSwitcher } from './Chart.jsx';
 import CategorySplit from './CategorySplit.jsx';
 import { analyze, changeLabel } from '../lib/insights.js';
 import { category } from '../lib/categories.js';
-import { dayLabel, longToday, monthLabel, money } from '../lib/format.js';
+import { dayLabel, longToday, monthKey, monthLabel, money, parseAmount, todayISO } from '../lib/format.js';
 import { budgetMonth, budgetRows, groupByDate, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
 
-export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, onDelete, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
+export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, account = null, onSaveBalance, onDelete, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
   const [kind, setKind] = useState('uit');
   const [catFilter, setCatFilter] = useState(null);
+  const [balanceOpen, setBalanceOpen] = useState(false);
   useEffect(() => setCatFilter(null), [book, month, period]);
   const sum = useMemo(() => summarize(entries), [entries]);
   const jaar = period === 'jaar';
@@ -34,7 +35,15 @@ export default function Overview({ household, isOwner, book, setBook, month, set
   const names = Object.fromEntries(household.members.map((m) => [m.user_id, m.display_name]));
 
   const zaak = book === 'zaak';
-  const shown = useCountUp(sum.balance);
+  // Deze maand, met een echte rekeningstand: dan toont de kaart wat er nu echt op de rekening staat.
+  const thisMonth = !jaar && month === monthKey();
+  const real = thisMonth && account ? account : null;
+  const heroValue = real ? real.balance : sum.balance;
+  const shown = useCountUp(heroValue);
+  const heroLabel = real ? 'Nu op de rekening'
+    : jaar ? (zaak ? `Resultaat vennootschap ${year}` : `Saldo heel ${year}`)
+    : zaak ? 'Resultaat vennootschap'
+    : thisMonth ? 'Nog te besteden' : `Saldo ${monthLabel(month).split(' ')[0]}`;
   const spentRatio = sum.income > 0 ? Math.min(1, sum.expense / sum.income) : sum.expense > 0 ? 1 : 0;
 
   return (
@@ -75,15 +84,27 @@ export default function Overview({ household, isOwner, book, setBook, month, set
 
       <div className="two-col">
         <div className="stack">
-          <section className={'hero' + (zaak ? ' zaak' : '')} aria-label={jaar ? `Saldo ${year}` : 'Saldo deze maand'}>
-            <span className="small bold" style={{ opacity: 0.92 }}>{jaar ? (zaak ? `Resultaat vennootschap ${year}` : `Saldo heel ${year}`) : zaak ? 'Resultaat vennootschap' : 'Nog te besteden'}</span>
+          <section className={'hero' + (zaak ? ' zaak' : '')} aria-label={real ? 'Nu op de rekening' : jaar ? `Saldo ${year}` : 'Saldo deze maand'}>
+            <span className="small bold" style={{ opacity: 0.92 }}>{heroLabel}</span>
             <CoinStack />
-            <span className="big" aria-label={money(sum.balance)}>{money(shown, { round: Math.abs(sum.balance) >= 100000 })}</span>
+            <span className="big" aria-label={money(heroValue)}>{money(shown, { round: Math.abs(heroValue) >= 100000 })}</span>
+            {real && (
+              <span className="tiny" style={{ opacity: 0.92, marginTop: -6 }}>
+                Stand {dayLabel(real.asOf).toLowerCase()} 's avonds: <b>{money(real.start)}</b>
+                {real.count > 0 ? `, daarna ${[real.income ? `+\u00a0${money(real.income)}` : '', real.expense ? `−\u00a0${money(real.expense)}` : ''].filter(Boolean).join(' en ')}` : ', sindsdien nog niets geboekt'}
+              </span>
+            )}
             <div className="bar" key={book + period + month}><span style={{ width: `${Math.round(spentRatio * 100)}%` }} /></div>
+            {real && <span className="tiny bold" style={{ opacity: 0.92, marginBottom: -8 }}>Deze maand · saldo {sum.balance < 0 ? '− ' : '+ '}{money(Math.abs(sum.balance))}</span>}
             <div className="spread small">
               <span>In: <b>{money(sum.income)}</b></span>
               <span>Uit: <b>{money(sum.expense)}</b></span>
             </div>
+            {thisMonth && onSaveBalance && (
+              <button className="hero-link" onClick={() => setBalanceOpen(true)}>
+                <Icon name="wallet" size={16} /> {real ? 'Rekeningstand aanpassen' : 'Echte rekeningstand ingeven'}
+              </button>
+            )}
           </section>
 
           {zaak && onOpenTax && (
@@ -203,6 +224,15 @@ export default function Overview({ household, isOwner, book, setBook, month, set
         )}
       </div>
 
+      {balanceOpen && (
+        <BalanceSheet
+          account={account}
+          zaak={zaak}
+          onClose={() => setBalanceOpen(false)}
+          onSave={async (asOf, cents) => { await onSaveBalance(asOf, cents); setBalanceOpen(false); }}
+        />
+      )}
+
       {open && (
         <EntrySheet
           entry={open}
@@ -288,6 +318,59 @@ function EntrySheet({ entry, who, onClose, onDelete }) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// De echte stand van de rekening ingeven, op een dag 's avonds. Mag ook in het verleden:
+// alles wat na die dag geboekt is, rekent de app er vanzelf bij.
+function BalanceSheet({ account, zaak, onClose, onSave }) {
+  const [text, setText] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const today = todayISO();
+
+  async function save() {
+    const t = text.trim();
+    const neg = /^[-−]/.test(t);
+    const cents = parseAmount(t.replace(/^[-−]\s*/, ''));
+    if (cents === null) { setError('Typ het bedrag, bv. 569,53'); return; }
+    if (!date || date > today) { setError('Kies vandaag of een dag in het verleden.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(date, neg ? -cents : cents);
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Rekeningstand" onClick={(e) => e.stopPropagation()}>
+        <div className="spread">
+          <h2>Echte rekeningstand</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Sluiten" style={{ background: 'var(--bg)' }}><Icon name="close" /></button>
+        </div>
+        <span className="small muted">Kijk in je bankapp wat er op de rekening staat. De app neemt dat bedrag als vertrekpunt en telt er alles bij wat je na die dag boekt.</span>
+        {account && <span className="small">Nu: <b>{money(account.start)}</b> op {dayLabel(account.asOf).toLowerCase()}</span>}
+        <label className="field">
+          Op de rekening
+          <div style={{ position: 'relative' }}>
+            <span className="muted" style={{ position: 'absolute', left: 14, top: 14 }}>€</span>
+            <input className="input" inputMode="decimal" autoFocus style={{ paddingLeft: 30, fontSize: 20 }} value={text} placeholder="bv. 569,53" onChange={(e) => { setText(e.target.value); setError(''); }} onKeyDown={(e) => e.key === 'Enter' && save()} />
+          </div>
+        </label>
+        <label className="field">
+          Op welke dag ('s avonds)?
+          <input className="input" type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        {error && <div className="error">{error}</div>}
+        <button className={'btn' + (zaak ? ' blue' : '')} disabled={busy} onClick={save}><Icon name="check" /> {busy ? 'Bewaren…' : 'Bewaren'}</button>
+        <span className="tiny muted">Tip: importeer je een bankbestand van Crelan, dan zet de app de stand vanzelf juist.</span>
       </div>
     </div>
   );

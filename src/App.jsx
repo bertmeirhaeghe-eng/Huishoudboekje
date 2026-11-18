@@ -20,7 +20,7 @@ import Cleanup from './components/Cleanup.jsx';
 import Board from './components/Board.jsx';
 import Insights from './components/Insights.jsx';
 import { useHome } from './lib/useHome.js';
-import { budgetMonth, inPeriod } from './lib/stats.js';
+import { accountBalance, budgetMonth, inPeriod } from './lib/stats.js';
 import { getEarlyDays, setEarlyDays as saveEarlyDays } from './lib/prefs.js';
 import { addDays, mealFor } from './lib/kitchen.js';
 import { startsOnBoard } from './lib/prefs.js';
@@ -61,6 +61,8 @@ function Boekje({ household, onHouseholdChange }) {
   const [period, setPeriod] = useState('maand'); // maand | jaar
   const [entries, setEntries] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [balances, setBalances] = useState([]); // echte rekeningstand per boekje
+  const [sinceEntries, setSinceEntries] = useState([]); // boekingen vanaf die stand tot vandaag
   const [error, setError] = useState('');
   const [party, setParty] = useState(null);
   const [draft, setDraft] = useState(null); // voorinvulling vanuit spraak
@@ -90,6 +92,13 @@ function Boekje({ household, onHouseholdChange }) {
       setEntries(e);
       setBudgets(b);
       setError('');
+      // Apart, zodat een fout hier het overzicht nooit blokkeert.
+      try {
+        const bal = await store.listBalances(household.id);
+        const oldest = bal.reduce((m, x) => (!m || x.as_of < m ? x.as_of : m), null);
+        setSinceEntries(oldest ? await store.listEntries(household.id, addDays(oldest, 1), todayISO()) : []);
+        setBalances(bal);
+      } catch { /* zonder rekeningstand werkt alles gewoon verder */ }
     } catch (err) {
       setError(err.message);
     }
@@ -106,6 +115,13 @@ function Boekje({ household, onHouseholdChange }) {
   const bookEntries = useMemo(() => entries.filter((e) => e.book === book), [entries, book]);
   const monthEntries = useMemo(() => bookEntries.filter((e) => budgetMonth(e, earlyDays) === month), [bookEntries, month, earlyDays]);
   const periodEntries = useMemo(() => bookEntries.filter((e) => inPeriod(e, month, period, earlyDays)), [bookEntries, month, period, earlyDays]);
+  const balanceAnchor = balances.find((b) => b.book === book) || null;
+  const account = useMemo(() => accountBalance(balanceAnchor, sinceEntries.filter((e) => e.book === book), todayISO()), [balanceAnchor, sinceEntries, book]);
+  async function saveBalance(asOf, cents, b = book) {
+    const where = await store.setBalance(household.id, b, asOf, cents);
+    await load();
+    return where;
+  }
   const bookBudgets = useMemo(() => Object.fromEntries(budgets.filter((b) => b.book === book).map((b) => [b.category, b.amount_cents])), [budgets, book]);
 
   const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
@@ -167,7 +183,15 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'meer') {
     content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenCleanup={() => go('dubbels')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
-    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date) => { if (date) setMonth(budgetMonth({ date, type: 'uit' })); await load(); go('overzicht'); toast(`${n} boekingen geïmporteerd`); }} />;
+    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date, closing) => {
+      if (date) setMonth(budgetMonth({ date, type: 'uit' }));
+      // Het bankbestand kent de echte stand: gebruik die, tenzij er al een recentere stand is.
+      const current = balances.find((b) => b.book === (closing?.book || 'gezin'));
+      const useIt = closing && (!current || closing.date >= current.as_of);
+      if (useIt) { try { await store.setBalance(household.id, closing.book, closing.date, closing.amount_cents); } catch { /* niet erg */ } }
+      await load(); go('overzicht');
+      toast(useIt ? `${n} boekingen geïmporteerd · rekeningstand bijgewerkt` : `${n} boekingen geïmporteerd`);
+    }} />;
   } else if (screen === 'dubbels') {
     content = <Cleanup household={household} onBack={() => go('meer')} onDone={async (n) => { await load(); go('meer'); toast(`${n} dubbels verwijderd`); }} />;
   } else if (screen === 'privezaak') {
@@ -191,6 +215,8 @@ function Boekje({ household, onHouseholdChange }) {
         months={months}
         earlyDays={earlyDays}
         budgets={bookBudgets}
+        account={account}
+        onSaveBalance={saveBalance}
         onDelete={async (id) => { await store.deleteEntry(id); await load(); }}
         onOpenChart={() => go('grafiek')}
         onOpenBudgets={() => go('budgetten')}
