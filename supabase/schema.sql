@@ -43,6 +43,18 @@ create table if not exists public.budgets (
   primary key (household_id, book, category)
 );
 
+-- De echte rekeningstand op een dag (bv. 569,53 op 17/11 's avonds), per boekje.
+-- De app rekent daarmee verder: stand + inkomsten - uitgaven van de dagen erna.
+create table if not exists public.balances (
+  household_id uuid not null references public.households(id) on delete cascade,
+  book text not null check (book in ('gezin', 'zaak')),
+  as_of date not null,
+  amount_cents bigint not null check (abs(amount_cents) < 100000000000),
+  updated_by uuid default auth.uid() references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (household_id, book)
+);
+
 -- ───────────── Hulpfuncties voor de toegangsregels ─────────────
 
 create or replace function public.is_member(h uuid) returns boolean
@@ -67,6 +79,7 @@ alter table public.households enable row level security;
 alter table public.household_members enable row level security;
 alter table public.entries enable row level security;
 alter table public.budgets enable row level security;
+alter table public.balances enable row level security;
 
 drop policy if exists "leden zien hun gezin" on public.households;
 create policy "leden zien hun gezin" on public.households
@@ -110,6 +123,10 @@ create policy "boekingen verwijderen" on public.entries
 
 drop policy if exists "budgetten" on public.budgets;
 create policy "budgetten" on public.budgets
+  for all to authenticated using (public.can_see(household_id, book)) with check (public.can_see(household_id, book));
+
+drop policy if exists "rekeningstand" on public.balances;
+create policy "rekeningstand" on public.balances
   for all to authenticated using (public.can_see(household_id, book)) with check (public.can_see(household_id, book));
 
 -- ───────────── Thuis: boodschappen, voorraad, recepten, weekmenu (stap 4) ─────────────

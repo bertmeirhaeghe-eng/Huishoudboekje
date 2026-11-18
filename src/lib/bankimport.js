@@ -178,10 +178,26 @@ export function readBankCSV(text, { ownNames = [] } = {}) {
       kind: kind.trim(),
       own: isOwn,
       cash: isCash,
+      saldo: c.saldo >= 0 ? parseBankAmount(r[c.saldo]) : null,
     });
   }
   if (!rows.length) throw new Error('Ik vond geen verrichtingen in dit bestand.');
   return { bank, rows: rows.sort((a, b) => b.date.localeCompare(a.date)) };
+}
+
+// De stand van de rekening op het einde van de laatste dag in het bestand, volgens de bank zelf
+// (kolom "saldo na verrichting"). Op die dag kunnen meerdere verrichtingen staan: de laatste is
+// degene waarvan het saldo niet het "saldo ervoor" van een andere verrichting die dag is.
+// Geeft { date, amount_cents } terug, of null als het bestand geen saldo heeft.
+export function closingBalance(rows) {
+  const withSaldo = rows.filter((r) => Number.isInteger(r.saldo));
+  if (!withSaldo.length) return null;
+  const date = withSaldo.reduce((m, r) => (r.date > m ? r.date : m), withSaldo[0].date);
+  const day = withSaldo.filter((r) => r.date === date);
+  const before = new Set(day.map((r) => r.saldo - (r.type === 'in' ? r.amount_cents : -r.amount_cents)));
+  const last = day.filter((r) => !before.has(r.saldo));
+  // Eén duidelijke laatste verrichting? Anders (bv. twee keer hetzelfde bedrag heen en terug) de eerste lijn van de dag.
+  return { date, amount_cents: (last.length === 1 ? last[0] : day[0]).saldo };
 }
 
 // Datum verschuiven: '2026-01-05' + 2 -> '2026-01-07'.

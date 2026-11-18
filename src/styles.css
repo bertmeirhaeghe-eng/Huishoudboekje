@@ -532,3 +532,7 @@ details summary { cursor: pointer; }
 .tip-ico { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--blue-soft); color: var(--blue); }
 .tip.good .tip-ico { background: var(--green-soft); color: var(--green); }
 .tip.warn .tip-ico { background: var(--orange-soft); color: var(--orange); }
+
+/* Knop onderaan de saldokaart (rekeningstand) */
+.hero-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 8px 14px; min-height: 40px; background: rgba(255, 255, 255, 0.18); color: #fff; font-weight: 700; font-size: 13px; }
+.hero-link:active { background: rgba(255, 255, 255, 0.3); }

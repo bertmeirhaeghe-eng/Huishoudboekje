@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { categoriesFor } from '../lib/categories.js';
-import { markDuplicates, readBankCSV, shiftDate, NEAR_BEFORE, NEAR_AFTER } from '../lib/bankimport.js';
+import { closingBalance, markDuplicates, readBankCSV, shiftDate, NEAR_BEFORE, NEAR_AFTER } from '../lib/bankimport.js';
 import { dayLabel, money } from '../lib/format.js';
 import { store } from '../lib/store.js';
 
@@ -20,6 +20,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
   const [file, setFile] = useState(null); // { name, text }
   const [rows, setRows] = useState(null);
   const [bank, setBank] = useState('');
+  const [closing, setClosing] = useState(null); // echte stand volgens de bank, als het bestand die heeft
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [show, setShow] = useState(PAGE);
@@ -38,6 +39,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
       const existing = (await store.listEntries(household.id, shiftDate(dates[0], -NEAR_BEFORE), shiftDate(dates[dates.length - 1], NEAR_AFTER))).filter((e) => e.book === b);
       const marked = markDuplicates(r.rows, existing).map((x, i) => ({ ...x, i, on: !x.dup && !x.maybe, category: b === 'zaak' ? (x.type === 'in' ? 'andere_zaak_in' : 'andere_zaak') : x.category }));
       setBank(r.bank);
+      setClosing(closingBalance(r.rows));
       setRows(marked);
       setShow(PAGE);
     } catch (e) {
@@ -70,7 +72,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
     setError('');
     try {
       const n = await store.addEntries(chosen.map((r) => ({ household_id: household.id, book, type: r.type, amount_cents: r.amount_cents, category: r.category, date: r.date, note: r.note || null })));
-      onDone(n, chosen[0]?.date);
+      onDone(n, chosen[0]?.date, closing ? { ...closing, book } : null);
     } catch (e) {
       setError(e.message);
       setBusy(false);
@@ -122,6 +124,8 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
             <div className="spread small"><span>Nieuwe boekingen</span><b>{chosen.length}</b></div>
             <div className="spread small"><span>In / uit</span><b><span style={{ color: 'var(--green)' }}>+ {money(sumIn)}</span> / − {money(sumOut)}</b></div>
             <div className="spread small muted"><span>Overgeslagen (staat er al of misschien al)</span><span>{skipped.length}</span></div>
+            {closing && <div className="spread small"><span>Op de rekening volgens de bank, {dayLabel(closing.date).toLowerCase()} 's avonds</span><b>{money(closing.amount_cents)}</b></div>}
+            {closing && <span className="tiny muted">Na het importeren rekent de app vanaf deze stand verder.</span>}
           </section>
 
           <div className="seg" role="group" aria-label="Tonen">

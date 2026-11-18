@@ -45,6 +45,12 @@ Open het adres in **Chrome** op Android, tik op de drie puntjes › **App instal
 
 Met de microfoon kan je zeggen: "melk en eieren op de lijst", "de koffie is op", "vrijdag eten we lasagne" of "zaterdag om 10 uur zwemles".
 
+### Echte rekeningstand
+
+Op het overzicht staat onder het saldo de knop **Echte rekeningstand ingeven**. Geef in wat er op een bepaalde avond op de rekening stond (ook een dag in het verleden mag). De app toont dan *Nu op de rekening*: die stand plus alles wat je daarna boekt. Importeer je een bankbestand van Crelan, dan neemt de app de stand vanzelf over uit de kolom "saldo na verrichting".
+
+Zolang `supabase/schema.sql` niet opnieuw is uitgevoerd, bewaart de app die stand alleen op het toestel.
+
 ### Na deze update: database bijwerken
 
 Plak `supabase/schema.sql` opnieuw volledig in Supabase > SQL Editor en klik op Run. Bestaande gegevens blijven staan.

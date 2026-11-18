@@ -94,3 +94,20 @@ export function toCSV(entries, categoryName) {
   // Puntkomma als scheidingsteken: zo opent Excel in België het correct.
   return [head, ...rows].map((r) => r.map(esc).join(';')).join('\n');
 }
+
+// Wat staat er nu op de rekening? De echte stand op een dag ('as_of', 's avonds),
+// plus alle inkomsten en min alle uitgaven van de dagen daarna (tot en met 'upTo').
+// Hier telt de echte datum, niet de regel van de vroege inkomsten.
+export function accountBalance(anchor, entries, upTo = null) {
+  if (!anchor) return null;
+  let income = 0;
+  let expense = 0;
+  let count = 0;
+  for (const e of entries) {
+    if (e.date <= anchor.as_of || (upTo && e.date > upTo)) continue;
+    count += 1;
+    if (e.type === 'in') income += e.amount_cents;
+    else expense += e.amount_cents;
+  }
+  return { start: anchor.amount_cents, asOf: anchor.as_of, income, expense, count, balance: anchor.amount_cents + income - expense };
+}
