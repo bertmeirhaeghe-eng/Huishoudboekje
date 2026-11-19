@@ -80,6 +80,34 @@ Wil je dat Claude echt kijkt wat er staat (ook fruit, potten zonder etiket…), 
 
 Alleen wie aangemeld is in het huishoudboekje kan de functie gebruiken; de sleutel staat nooit in de app zelf.
 
+### Bank automatisch koppelen (Crelan, gratis via Enable Banking)
+
+Dan hoef je geen CSV-bestanden meer te downloaden: de app haalt je verrichtingen met één tik bij Crelan op. De app kan alleen **lezen**, nooit geld overschrijven. Wat al in het boekje staat (ook van een vroegere CSV-import of wat je zelf insprak) slaat de app over, net zoals bij een bestand. De echte rekeningstand wordt meteen mee bijgewerkt.
+
+Enable Banking is gratis zolang je alleen je eigen rekeningen koppelt. Eenmalig instellen (± 15 minuten):
+
+1. **Account maken.** Ga naar [enablebanking.com](https://enablebanking.com), klik op *Get started* en maak een account. Bevestig de mail en open het *Control Panel*.
+2. **App aanmaken.** In het Control Panel: *API applications* › *Add a new application*.
+   - Environment: **Production** (niet Sandbox).
+   - Application name: `Huishoudboekje`.
+   - Allowed redirect URLs: `https://bertmeirhaeghe-eng.github.io/Huishoudboekje/` (precies zo, met de schuine streep op het einde).
+   - Private key: laat *Generate in the browser* staan. Bij het bewaren downloadt je computer een `.pem`-bestand. Bewaar het goed en deel het met niemand.
+   - Vul bij e-mail, privacy en voorwaarden gerust het adres van de app in, dat wordt niet nagekeken.
+   - Noteer het **Application ID** dat je daarna ziet.
+3. **Je Crelan-rekening toelaten.** Klik in het Control Panel bij je app op *Link accounts*, kies Crelan en bevestig in de Crelan-app. Daarna staat de app op *Restricted* en *Active*: zo is het gratis, alleen voor jouw eigen rekeningen.
+4. **De twee geheimen in Supabase zetten.** In Supabase: **Edge Functions › Secrets**:
+   - `ENABLE_BANKING_APP_ID` met het Application ID
+   - `ENABLE_BANKING_PRIVATE_KEY` met de **volledige inhoud** van het `.pem`-bestand (open het met Kladblok, alles kopiëren, ook de lijnen met BEGIN en END)
+5. **Database bijwerken.** Plak `supabase/schema.sql` opnieuw volledig in Supabase › SQL Editor en klik op Run.
+6. **De functie plaatsen.** In Supabase: **Edge Functions › Deploy a new function › Via editor**, naam precies `bank-koppeling`, plak de inhoud van `supabase/functions/bank-koppeling/index.ts` en klik op Deploy.
+7. **Koppelen in de app.** Open de app › **Meer** › **Bankafschrift importeren** › **Crelan koppelen**. Je gaat even naar Crelan om toestemming te geven en komt dan vanzelf terug in de app, met je verrichtingen klaar om te importeren.
+
+Daarna is het telkens: **Meer › Bankafschrift importeren › Nieuwe verrichtingen ophalen**.
+
+Ongeveer **elke 6 maanden** vraagt de bank om de toestemming te vernieuwen (een Europese regel). De app zegt het twee weken op voorhand; één tik op *Toestemming vernieuwen* en bevestigen in de Crelan-app volstaat.
+
+Alleen de eigenaar van het gezin kan de bank koppelen. Het `.pem`-bestand en de toestemming van de bank staan nooit in de app of in de code, alleen in Supabase.
+
 ## Voor ontwikkelaars
 
 ```bash

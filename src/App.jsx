@@ -53,9 +53,21 @@ export default function App() {
   return <Boekje household={household} onHouseholdChange={refreshHousehold} />;
 }
 
+// Terug van de bank (Enable Banking stuurt ?code=…&state=… of ?error=… naar de app)?
+function readBankReturn() {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (!q.get('state') || !(q.get('code') || q.get('error'))) return null;
+    const r = { code: q.get('code') || '', state: q.get('state'), error: q.get('error') || '', description: q.get('error_description') || '' };
+    history.replaceState(null, '', location.pathname + location.hash);
+    return r;
+  } catch { return null; }
+}
+
 function Boekje({ household, onHouseholdChange }) {
   const isOwner = household.role === 'eigenaar';
-  const [screen, setScreen] = useState(() => (startsOnBoard() ? 'bord' : 'overzicht'));
+  const [bankReturn] = useState(readBankReturn);
+  const [screen, setScreen] = useState(() => (bankReturn ? 'import' : startsOnBoard() ? 'bord' : 'overzicht'));
   const [book, setBook] = useState('gezin');
   const [month, setMonth] = useState(monthKey());
   const [period, setPeriod] = useState('maand'); // maand | jaar
@@ -183,7 +195,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'meer') {
     content = <Settings household={household} entries={entries} onChange={onHouseholdChange} onOpenTax={() => go('privezaak')} onOpenImport={() => go('import')} onOpenCleanup={() => go('dubbels')} onOpenBoard={() => go('bord')} earlyDays={earlyDays} setEarlyDays={setEarlyDays} />;
   } else if (screen === 'import') {
-    content = <BankImport household={household} isOwner={isOwner} onBack={() => go('meer')} onDone={async (n, date, closing) => {
+    content = <BankImport household={household} isOwner={isOwner} bankReturn={bankReturn} onBack={() => go('meer')} onDone={async (n, date, closing) => {
       if (date) setMonth(budgetMonth({ date, type: 'uit' }));
       // Het bankbestand kent de echte stand: gebruik die, tenzij er al een recentere stand is.
       const current = balances.find((b) => b.book === (closing?.book || 'gezin'));

@@ -11,3 +11,6 @@ export const GOOGLE_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
 // Naam (slug) van de Supabase-functie die voorraadfoto's bekijkt (in Supabase heet ze "voorraad-foto").
 // https://<project>.supabase.co/functions/v1/<deze-naam>
 export const PANTRY_FUNCTION = import.meta.env?.VITE_PANTRY_FUNCTION || 'swift-responder';
+
+// Naam (slug) van de Supabase-functie die verrichtingen bij de bank ophaalt (Enable Banking).
+export const BANK_FUNCTION = import.meta.env?.VITE_BANK_FUNCTION || 'bank-koppeling';

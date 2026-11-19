@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import CatIcon from './CatIcon.jsx';
 import { categoriesFor } from '../lib/categories.js';
-import { closingBalance, markDuplicates, readBankCSV, shiftDate, NEAR_BEFORE, NEAR_AFTER } from '../lib/bankimport.js';
-import { dayLabel, money } from '../lib/format.js';
+import { apiClosing, closingBalance, markDuplicates, readBankApi, readBankCSV, shiftDate, NEAR_BEFORE, NEAR_AFTER } from '../lib/bankimport.js';
+import { dayLabel, money, todayISO } from '../lib/format.js';
 import { store } from '../lib/store.js';
 
 const NAMES_KEY = 'boekje-eigen-namen';
@@ -14,10 +14,16 @@ function loadNames(fallback) {
   return fallback;
 }
 
-export default function BankImport({ household, isOwner, onBack, onDone }) {
+// Welk boekje hoort bij welke bankrekening? Onthouden op het toestel.
+const BOOK_KEY = 'boekje-bank-boek-';
+function bookFor(iban) {
+  try { return localStorage.getItem(BOOK_KEY + iban) || 'gezin'; } catch { return 'gezin'; }
+}
+
+export default function BankImport({ household, isOwner, onBack, onDone, bankReturn = null }) {
   const [book, setBook] = useState('gezin');
   const [names, setNames] = useState(() => loadNames(household.members.map((m) => m.display_name).filter(Boolean).join(', ')));
-  const [file, setFile] = useState(null); // { name, text }
+  const [file, setFile] = useState(null); // { name, text } of, rechtstreeks van de bank, { name, bank: { uid, iban, transactions, balances } }
   const [rows, setRows] = useState(null);
   const [bank, setBank] = useState('');
   const [closing, setClosing] = useState(null); // echte stand volgens de bank, als het bestand die heeft
@@ -32,19 +38,29 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
     setError('');
     setRows(null);
     try {
-      const text = f.text;
       const own = n.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
-      const r = readBankCSV(text, { ownNames: own });
+      const r = f.bank
+        ? { bank: 'Crelan', rows: readBankApi(f.bank.transactions, { ownNames: own }) }
+        : readBankCSV(f.text, { ownNames: own });
       const dates = r.rows.map((x) => x.date).sort();
-      const existing = (await store.listEntries(household.id, shiftDate(dates[0], -NEAR_BEFORE), shiftDate(dates[dates.length - 1], NEAR_AFTER))).filter((e) => e.book === b);
+      const existing = dates.length ? (await store.listEntries(household.id, shiftDate(dates[0], -NEAR_BEFORE), shiftDate(dates[dates.length - 1], NEAR_AFTER))).filter((e) => e.book === b) : [];
       const marked = markDuplicates(r.rows, existing).map((x, i) => ({ ...x, i, on: !x.dup && !x.maybe, category: b === 'zaak' ? (x.type === 'in' ? 'andere_zaak_in' : 'andere_zaak') : x.category }));
       setBank(r.bank);
-      setClosing(closingBalance(r.rows));
+      setClosing(f.bank ? apiClosing(r.rows, f.bank.balances) : closingBalance(r.rows));
       setRows(marked);
       setShow(PAGE);
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  function fromBank(acc) {
+    const b = bookFor(acc.iban || acc.uid);
+    const useBook = isOwner ? b : 'gezin';
+    setBook(useBook);
+    const ff = { name: acc.name || acc.iban || 'rekening', bank: acc };
+    setFile(ff);
+    read(ff, useBook);
   }
 
   async function pick(f) {
@@ -71,7 +87,12 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
     setBusy(true);
     setError('');
     try {
-      const n = await store.addEntries(chosen.map((r) => ({ household_id: household.id, book, type: r.type, amount_cents: r.amount_cents, category: r.category, date: r.date, note: r.note || null })));
+      const n = chosen.length ? await store.addEntries(chosen.map((r) => ({ household_id: household.id, book, type: r.type, amount_cents: r.amount_cents, category: r.category, date: r.date, note: r.note || null }))) : 0;
+      if (file?.bank) {
+        // Onthouden tot waar we zijn, en welk boekje bij deze rekening hoort.
+        try { localStorage.setItem(BOOK_KEY + (file.bank.iban || file.bank.uid), book); } catch {}
+        try { await store.bank('saved', { account: file.bank.uid, date: todayISO() }); } catch { /* volgende keer gewoon wat meer overlap */ }
+      }
       onDone(n, chosen[0]?.date, closing ? { ...closing, book } : null);
     } catch (e) {
       setError(e.message);
@@ -87,8 +108,11 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
         <h1>Bankafschrift importeren</h1>
       </div>
 
+      {!rows && isOwner && <BankLink bankReturn={bankReturn} onFetched={fromBank} />}
+
       {!rows && (
         <section className="card stack" style={{ gap: 12 }}>
+          {isOwner && store.mode !== 'demo' && <b>Of met een bestand</b>}
           <span className="small muted">Download je verrichtingen als CSV-bestand in myCrelan (of de app van je bank) en kies het hier. Je ziet eerst alles en beslist zelf wat erin komt. Wat al in het boekje staat, slaat de app over, ook als je het zelf of met je stem al had ingegeven.</span>
           <button className="btn" onClick={() => input.current?.click()}><Icon name="download" /> CSV-bestand kiezen</button>
           <input ref={input} type="file" accept=".csv,text/csv,text/plain" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
@@ -120,7 +144,7 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
       {rows && (
         <>
           <section className="card stack" style={{ gap: 8 }}>
-            <div className="spread"><b>{bank} · {file?.name}</b><button className="tiny bold link" onClick={() => { setRows(null); setFile(null); }}>Ander bestand</button></div>
+            <div className="spread"><b>{bank} · {file?.bank ? `opgehaald, ${file.name}` : file?.name}</b><button className="tiny bold link" onClick={() => { setRows(null); setFile(null); }}>{file?.bank ? 'Terug' : 'Ander bestand'}</button></div>
             <div className="spread small"><span>Nieuwe boekingen</span><b>{chosen.length}</b></div>
             <div className="spread small"><span>In / uit</span><b><span style={{ color: 'var(--green)' }}>+ {money(sumIn)}</span> / − {money(sumOut)}</b></div>
             <div className="spread small muted"><span>Overgeslagen (staat er al of misschien al)</span><span>{skipped.length}</span></div>
@@ -141,8 +165,8 @@ export default function BankImport({ household, isOwner, onBack, onDone }) {
           </div>
           {list.length > show && <button className="btn ghost" onClick={() => setShow((s) => s + PAGE)}>Toon meer ({list.length - show})</button>}
 
-          <button className={'btn' + (book === 'zaak' ? ' blue' : '')} disabled={!chosen.length || busy} onClick={save} style={{ position: 'sticky', bottom: 'calc(var(--nav-h) + 12px + env(safe-area-inset-bottom))' }}>
-            <Icon name="check" /> {busy ? 'Importeren…' : `${chosen.length} boekingen importeren`}
+          <button className={'btn' + (book === 'zaak' ? ' blue' : '')} disabled={(!chosen.length && !(file?.bank && closing)) || busy} onClick={save} style={{ position: 'sticky', bottom: 'calc(var(--nav-h) + 12px + env(safe-area-inset-bottom))' }}>
+            <Icon name="check" /> {busy ? 'Importeren…' : chosen.length ? `${chosen.length} boekingen importeren` : 'Alles staat er al · rekeningstand bijwerken'}
           </button>
         </>
       )}
@@ -175,3 +199,151 @@ function ImportRow({ r, book, onToggle, onCat }) {
   );
 }
 
+
+// ───────────── Rechtstreeks bij Crelan ophalen (Enable Banking) ─────────────
+
+const longDate = (iso) => new Date(iso).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' });
+// Een terugkeer van de bank mag maar één keer verwerkt worden (de code van de bank werkt maar één keer).
+let handledReturn = null;
+const daysLeft = (iso) => Math.floor((Date.parse(iso) - Date.now()) / 86400000);
+
+function BankLink({ bankReturn, onFetched }) {
+  const [status, setStatus] = useState(null); // null = laden
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [expired, setExpired] = useState(false);
+  const [account, setAccount] = useState('');
+  const [confirmOff, setConfirmOff] = useState(false);
+
+  async function fetchNow(uid = account, st = status) {
+    setBusy('ophalen');
+    setError('');
+    try {
+      const res = await store.bank('fetch', { account: uid || st?.accounts?.[0]?.uid });
+      const acc = res.accounts?.[0];
+      if (!acc) throw new Error('De bank gaf geen rekening door.');
+      onFetched(acc);
+    } catch (e) {
+      if (e.code === 'verlopen') setExpired(true);
+      setError(e.message);
+      setBusy('');
+    }
+  }
+
+  useEffect(() => {
+    let off = false;
+    (async () => {
+      try {
+        // Terug van de bank: eerst de toestemming bewaren, dan meteen ophalen.
+        if (bankReturn && handledReturn !== bankReturn) {
+          handledReturn = bankReturn;
+          if (bankReturn.error) {
+            setError(bankReturn.error === 'access_denied' ? 'Je gaf bij Crelan geen toestemming. Er is niets gekoppeld.' : `Crelan gaf een fout: ${bankReturn.description || bankReturn.error}`);
+          } else {
+            setBusy('koppelen');
+            const st = await store.bank('finish', { code: bankReturn.code, state: bankReturn.state });
+            if (off) return;
+            const full = { ready: true, ...st };
+            setStatus(full);
+            setAccount(st.accounts?.[0]?.uid || '');
+            await fetchNow(st.accounts?.[0]?.uid, full);
+            return;
+          }
+        }
+        const st = await store.bank('status');
+        if (off) return;
+        setStatus(st);
+        setAccount(st.accounts?.[0]?.uid || '');
+        if (st.valid_until && daysLeft(st.valid_until) < 0) setExpired(true);
+      } catch (e) {
+        if (off) return;
+        setStatus((s) => s || { ready: e.code !== 'niet-ingesteld', linked: false, missing: e.code === 'niet-ingesteld' ? e.message : '' });
+        if (e.code !== 'niet-ingesteld') setError(e.message);
+        setBusy('');
+      }
+    })();
+    return () => { off = true; };
+  }, []);
+
+  async function link() {
+    setBusy('koppelen');
+    setError('');
+    try {
+      const { url } = await store.bank('start');
+      location.href = url; // naar Crelan; daarna komt de bank terug naar de app
+    } catch (e) {
+      setError(e.message);
+      setBusy('');
+    }
+  }
+
+  async function unlink() {
+    setBusy('loskoppelen');
+    try { await store.bank('unlink'); setStatus((s) => ({ ...s, linked: false, accounts: [] })); setExpired(false); } catch (e) { setError(e.message); }
+    setBusy('');
+    setConfirmOff(false);
+  }
+
+  if (!status || status.demo) {
+    if (!status && (busy || bankReturn)) return <section className="card small muted">{busy === 'koppelen' ? 'Crelan koppelen…' : 'Even geduld…'}</section>;
+    return null;
+  }
+
+  const left = status.valid_until ? daysLeft(status.valid_until) : null;
+  const soon = expired || (left != null && left < 14);
+
+  return (
+    <section className="card stack" style={{ gap: 12 }}>
+      <div className="row" style={{ gap: 10 }}><Icon name="link" /><b>Rechtstreeks van Crelan</b></div>
+
+      {!status.ready && (
+        <span className="small muted">
+          Nog niet ingesteld. Volg eenmalig de stappen in de handleiding (Bank automatisch koppelen), daarna haalt de app je verrichtingen met één tik op.
+          {status.missing ? ` ${status.missing}` : ''}
+        </span>
+      )}
+
+      {status.ready && !status.linked && (
+        <>
+          <span className="small muted">Koppel één keer je rekening. Daarna haalt de app je verrichtingen met één tik op, zonder bestanden. De app kan alleen lezen, nooit geld overschrijven.</span>
+          <button className="btn" disabled={Boolean(busy)} onClick={link}><Icon name="link" /> {busy === 'koppelen' ? 'Naar Crelan…' : 'Crelan koppelen'}</button>
+        </>
+      )}
+
+      {status.ready && status.linked && (
+        <>
+          {status.accounts?.length > 1 && (
+            <label className="field">
+              Rekening
+              <select className="input" value={account} onChange={(e) => setAccount(e.target.value)}>
+                {status.accounts.map((a) => <option key={a.uid} value={a.uid}>{[a.name, a.iban].filter(Boolean).join(' · ')}</option>)}
+              </select>
+            </label>
+          )}
+          {!expired && (
+            <button className="btn" disabled={Boolean(busy)} onClick={() => fetchNow()}>
+              <Icon name="download" /> {busy === 'ophalen' ? 'Ophalen bij Crelan…' : busy === 'koppelen' ? 'Crelan koppelen…' : 'Nieuwe verrichtingen ophalen'}
+            </button>
+          )}
+          {status.valid_until && (
+            <span className={'small' + (soon ? '' : ' muted')}>
+              {expired ? 'De toestemming bij Crelan is verlopen. Vernieuw ze even, dat duurt een minuutje.' : soon ? `De toestemming loopt af op ${longDate(status.valid_until)}. Vernieuw ze even, dat duurt een minuutje.` : `Toestemming geldig tot ${longDate(status.valid_until)}.`}
+            </span>
+          )}
+          {soon && <button className={'btn' + (expired ? '' : ' ghost')} disabled={Boolean(busy)} onClick={link}><Icon name="repeat" /> Toestemming vernieuwen</button>}
+          {!confirmOff
+            ? <button className="tiny link" style={{ alignSelf: 'flex-start', color: 'var(--muted)' }} onClick={() => setConfirmOff(true)}>Koppeling verwijderen</button>
+            : (
+              <div className="row small" style={{ gap: 12 }}>
+                <span>Zeker? Je kan later opnieuw koppelen.</span>
+                <button className="tiny bold link" disabled={Boolean(busy)} onClick={unlink}>Ja, verwijderen</button>
+                <button className="tiny link" onClick={() => setConfirmOff(false)}>Nee</button>
+              </div>
+            )}
+        </>
+      )}
+
+      {error && <div className="error">{error}</div>}
+    </section>
+  );
+}

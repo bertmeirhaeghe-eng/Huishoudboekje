@@ -129,6 +129,26 @@ drop policy if exists "rekeningstand" on public.balances;
 create policy "rekeningstand" on public.balances
   for all to authenticated using (public.can_see(household_id, book)) with check (public.can_see(household_id, book));
 
+-- ───────────── Bank rechtstreeks koppelen (Enable Banking, alleen lezen) ─────────────
+-- Hier bewaart de Supabase-functie "bank-koppeling" de toestemming van de bank.
+-- De app zelf kan deze tabel niet lezen of wijzigen: alleen de functie (met de service-sleutel).
+
+create table if not exists public.bank_links (
+  household_id uuid primary key references public.households(id) on delete cascade,
+  session_id text,
+  bank text,
+  accounts jsonb not null default '[]'::jsonb,
+  valid_until timestamptz,
+  fetched jsonb not null default '{}'::jsonb,
+  pending_state text,
+  pending_at timestamptz,
+  linked_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.bank_links enable row level security;
+-- Bewust geen policies: rechtstreeks lezen of schrijven kan niet.
+revoke all on public.bank_links from anon, authenticated;
+
 -- ───────────── Thuis: boodschappen, voorraad, recepten, weekmenu (stap 4) ─────────────
 -- Dit deel is voor het hele gezin zichtbaar.
 
