@@ -67,6 +67,11 @@ export const demoStore = {
     save(d);
     return row;
   },
+  // De bank rechtstreeks koppelen kan alleen met Supabase (de sleutel van de bank mag niet op het toestel staan).
+  async bank(action) {
+    if (action === 'status') return { ready: false, linked: false, demo: true };
+    const e = new Error('In proefmodus kan de app de bank niet koppelen.'); e.code = 'niet-ingesteld'; throw e;
+  },
   async addEntries(list) {
     const d = db();
     const at = new Date().toISOString(); // één import, één tijdstip (zoals in de database)

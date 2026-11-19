@@ -1,9 +1,16 @@
 // Gedeelde gegevens via Supabase. De beveiliging zit in de database-regels (supabase/schema.sql).
 import { createClient } from '@supabase/supabase-js';
-import { PANTRY_FUNCTION } from './config.js';
+import { BANK_FUNCTION, PANTRY_FUNCTION } from './config.js';
 
 export function createSupabaseStore(url, anonKey) {
-  const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  const sb = createClient(url, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      // Komt de bank terug naar de app (?code=…&state=…, of ?error=…&state=…), dan is dat geen aanmelding.
+      detectSessionInUrl: (u, p) => !u.searchParams.get('state') && Boolean(p.access_token || p.error || p.error_description || p.error_code),
+    },
+  });
 
   const must = ({ data, error }) => {
     if (error) throw new Error(translate(error.message));
@@ -162,6 +169,24 @@ export function createSupabaseStore(url, anonKey) {
         const e = new Error('geen-ai'); e.code = 'geen-ai'; e.reden = reden; throw e;
       }
       throw new Error(msg || 'De foto kon niet bekeken worden.');
+    },
+
+    // Bank rechtstreeks (Supabase-functie "bank-koppeling", via Enable Banking). Alleen lezen.
+    // action: status | start | finish | fetch | saved | unlink. Een fout heeft .code (bv. 'verlopen', 'niet-ingesteld').
+    async bank(action, body = {}) {
+      const { data, error } = await sb.functions.invoke(BANK_FUNCTION, { body: { action, ...body } });
+      if (!error) return data;
+      const res = error.context;
+      let code = '';
+      let reden = '';
+      try { const b = await res.json(); code = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
+      if (!code) {
+        if (res?.status === 404) { code = 'niet-ingesteld'; reden = 'De functie bank-koppeling is nog niet geplaatst in Supabase.'; }
+        else if (error.name !== 'FunctionsHttpError') { code = 'niet-ingesteld'; reden = 'De functie bank-koppeling is niet bereikbaar.'; }
+      }
+      const e = new Error(reden || 'Het ophalen bij de bank lukte niet.');
+      e.code = code || 'fout';
+      throw e;
     },
 
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.

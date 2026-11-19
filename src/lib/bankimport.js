@@ -135,6 +135,32 @@ export function suggestCategory({ type, name, note, kind }) {
 
 // ───────────── Alles samen ─────────────
 
+// Eén verrichting van de bank (uit een CSV-bestand of rechtstreeks opgehaald) omzetten naar een rij
+// voor het importscherm. cents is negatief voor een uitgave. Geeft null terug als er iets ontbreekt.
+function bankRow({ date, cents, rawName = '', note = '', kind = '', saldo = null }, own) {
+  if (!date || !cents) return null;
+  rawName = String(rawName || '');
+  note = String(note || '');
+  kind = String(kind || '');
+  const type = cents > 0 ? 'in' : 'uit';
+  const name = cleanName(rawName, note, kind);
+  const nameN = norm(rawName);
+  const isOwn = own.some((o) => nameN.includes(o) || o.split(/\s+/).filter((w) => w.length >= 3).every((w) => nameN.includes(w)));
+  const isCash = CASH.test(kind);
+  const memo = /\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(note) || /^[\d/+*\s]+$/.test(note) ? '' : note.trim();
+  return {
+    date,
+    type,
+    amount_cents: Math.abs(cents),
+    category: suggestCategory({ type, name: rawName, note, kind }),
+    note: (memo && memo.length <= 60 && !/^\/C\//.test(memo) ? `${name}: ${memo}` : name).slice(0, 300),
+    kind: kind.trim(),
+    own: isOwn,
+    cash: isCash,
+    saldo: Number.isInteger(saldo) ? saldo : null,
+  };
+}
+
 // Geeft { bank, rows } terug, of gooit een fout met uitleg.
 export function readBankCSV(text, { ownNames = [] } = {}) {
   const table = parseCSV(text);
@@ -157,29 +183,15 @@ export function readBankCSV(text, { ownNames = [] } = {}) {
       if (seen.has(line)) continue;
       seen.add(line);
     }
-    const date = parseBankDate(r[c.date]);
-    const cents = parseBankAmount(r[c.amount]);
-    if (!date || !cents) continue;
-    const rawName = c.name >= 0 ? r[c.name] : '';
-    const note = c.note >= 0 ? r[c.note] : '';
-    const kind = c.type >= 0 ? r[c.type] : '';
-    const type = cents > 0 ? 'in' : 'uit';
-    const name = cleanName(rawName, note, kind);
-    const nameN = norm(rawName);
-    const isOwn = own.some((o) => nameN.includes(o) || o.split(/\s+/).filter((w) => w.length >= 3).every((w) => nameN.includes(w)));
-    const isCash = CASH.test(kind);
-    const memo = /\d{2}-\d{2}-\d{4} \d{2}:\d{2}/.test(note) || /^[\d/+*\s]+$/.test(note) ? '' : note.trim();
-    rows.push({
-      date,
-      type,
-      amount_cents: Math.abs(cents),
-      category: suggestCategory({ type, name: rawName, note, kind }),
-      note: (memo && memo.length <= 60 && !/^\/C\//.test(memo) ? `${name}: ${memo}` : name).slice(0, 300),
-      kind: kind.trim(),
-      own: isOwn,
-      cash: isCash,
+    const row = bankRow({
+      date: parseBankDate(r[c.date]),
+      cents: parseBankAmount(r[c.amount]),
+      rawName: c.name >= 0 ? r[c.name] : '',
+      note: c.note >= 0 ? r[c.note] : '',
+      kind: c.type >= 0 ? r[c.type] : '',
       saldo: c.saldo >= 0 ? parseBankAmount(r[c.saldo]) : null,
-    });
+    }, own);
+    if (row) rows.push(row);
   }
   if (!rows.length) throw new Error('Ik vond geen verrichtingen in dit bestand.');
   return { bank, rows: rows.sort((a, b) => b.date.localeCompare(a.date)) };
@@ -247,4 +259,61 @@ export function markDuplicates(rows, existing) {
     if (best) { best.x.used = true; maybe.set(i, { date: best.x.date, note: best.x.note || '' }); }
   }
   return rows.map((r, i) => ({ ...r, dup: dup.has(i), dupNote: dup.get(i) || '', maybe: maybe.get(i) || null }));
+}
+
+// ───────────── Rechtstreeks van de bank (Enable Banking) ─────────────
+
+const apiCents = (a) => (a && a.amount != null ? parseBankAmount(String(a.amount).replace(',', '.')) : null);
+
+// Verrichtingen zoals de bank ze via open banking (PSD2) doorgeeft, omzetten naar dezelfde rijen
+// als een CSV-bestand. Zo gebruiken het importscherm, de dubbel-controle en de rekeningstand
+// precies dezelfde regels. Nog niet geboekte verrichtingen (status PDNG) laten we weg:
+// die kunnen nog veranderen en komen de volgende keer vanzelf mee.
+export function readBankApi(transactions, { ownNames = [] } = {}) {
+  const own = ownNames.map(norm).filter((x) => x.length >= 3);
+  const rows = [];
+  const seen = new Set();
+  for (const t of transactions || []) {
+    if (!t || (t.status && t.status !== 'BOOK')) continue;
+    if (t.entry_reference) {
+      if (seen.has(t.entry_reference)) continue;
+      seen.add(t.entry_reference);
+    }
+    let cents = apiCents(t.transaction_amount);
+    if (!cents) continue;
+    const out = t.credit_debit_indicator ? t.credit_debit_indicator === 'DBIT' : cents < 0;
+    cents = Math.abs(cents) * (out ? -1 : 1);
+    const party = out ? t.creditor : t.debtor;
+    const info = Array.isArray(t.remittance_information) ? t.remittance_information.join(' ') : String(t.remittance_information || '');
+    const code = t.bank_transaction_code || {};
+    const row = bankRow({
+      date: parseBankDate(t.booking_date || t.value_date || t.transaction_date || ''),
+      cents,
+      rawName: party?.name || '',
+      note: info.replace(/\s+/g, ' ').trim(),
+      kind: code.description || t.note || '',
+      saldo: apiCents(t.balance_after_transaction),
+    }, own);
+    if (row) rows.push(row);
+  }
+  return rows.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// De echte stand volgens de bank. Geeft de bank bij elke verrichting het saldo erna, dan doen we
+// hetzelfde als bij een CSV-bestand. Anders nemen we het geboekte saldo (zonder wat nog in
+// behandeling is), op de datum die de bank erbij geeft.
+const BOOKED = ['CLBD', 'ITBD', 'closingBooked', 'interimBooked'];
+export function apiClosing(rows, balances) {
+  const fromRows = closingBalance(rows);
+  if (fromRows) return fromRows;
+  const list = (balances || []).filter((b) => BOOKED.includes(b.balance_type) && Number.isInteger(apiCents(b.balance_amount)));
+  if (!list.length) return null;
+  const b = list.sort((x, y) => BOOKED.indexOf(x.balance_type) - BOOKED.indexOf(y.balance_type))[0];
+  const last = rows.reduce((m, r) => (r.date > m ? r.date : m), '');
+  const ref = parseBankDate(b.reference_date || '');
+  // Een slotsaldo (CLBD) hoort bij het einde van zijn dag; anders geldt de laatste geboekte dag.
+  // Bij elke volgende keer ophalen wordt de stand opnieuw gezet, dus een kleine afwijking zet zich recht.
+  const date = ref || last;
+  if (!date) return null;
+  return { date, amount_cents: apiCents(b.balance_amount) };
 }
