@@ -32,7 +32,7 @@ export default function PantryPhoto({ file, home, place: startPlace, onClose, to
       let where = startPlace || 'kast';
       try {
         const img = await prepareImage(file);
-        const res = await store.scanPantryPhoto({ ...img, known: home.pantry.map((p) => p.name) });
+        const res = await store.scanPantryPhoto({ image: img.data, mediaType: img.mediaType, known: home.pantry.map((p) => p.name) });
         found = res.items || [];
         if (res.plaats) where = res.plaats;
       } catch (e) {
