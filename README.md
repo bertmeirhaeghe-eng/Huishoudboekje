@@ -73,13 +73,24 @@ Wil je dat de app ook zelf afspraken toevoegt? Vul dan een OAuth Client ID in bi
 ### Voorraad van een foto (AI) aanzetten
 
 In de voorraad kan je een foto van de kast nemen. Zonder extra instelling leest de app alleen de etiketten.
-Wil je dat Claude echt kijkt wat er staat (ook fruit, potten zonder etiket…), doe dan eenmalig:
+Wil je dat de AI echt kijkt wat er staat (ook fruit, potten zonder etiket…), dan gebruikt de functie standaard **Google Gemini** (gratis), met dezelfde sleutel `GEMINI_API_KEY` als *Privé of zaak?* (zie hieronder hoe je die maakt).
 
-1. Maak een account op [console.anthropic.com](https://console.anthropic.com), zet er wat tegoed op (5 dollar is genoeg voor duizenden foto's: de functie gebruikt het kleine, goedkope model Claude Haiku) en maak een API-sleutel.
-2. In Supabase: **Edge Functions → Secrets** → nieuw geheim `ANTHROPIC_API_KEY` met die sleutel.
-3. In Supabase: **Edge Functions → Deploy a new function → Via editor**, naam `voorraad-foto`, plak de inhoud van `supabase/functions/voorraad-foto/index.ts` en klik op Deploy.
+1. In Supabase: **Edge Functions › Secrets**: zorg dat `GEMINI_API_KEY` er staat.
+2. In Supabase: **Edge Functions**, open de functie `swift-responder` (zo heet de voorraadfunctie bij ons), tab **Code**, vervang alles door de inhoud van `supabase/functions/voorraad-foto/index.ts` en klik op Deploy. (Nog geen functie? **Deploy a new function › Via editor**, en zet de naam dan ook in `PANTRY_FUNCTION` in `src/lib/config.js`.)
 
-Alleen wie aangemeld is in het huishoudboekje kan de functie gebruiken; de sleutel staat nooit in de app zelf.
+Staat er ook een `ANTHROPIC_API_KEY`, dan kijkt Claude als Gemini het niet haalt (bv. de gratis limiet is op). Lukt geen van beide, dan leest de app weer zelf de etiketten.
+
+### Categorieën en tips met AI (Gemini)
+
+Met dezelfde Gemini-sleutel kan de app ook:
+
+- **Bij het importeren van de bank** een categorie kiezen voor verrichtingen die de vaste regels niet herkennen (die in "Andere" zouden vallen). Ze krijgen een ✨, je kijkt ze na voor je importeert.
+- **Bij de inzichten** een korte samenvatting en tips op maat schrijven. Dat gebeurt pas als je op *Vraag tips aan Gemini* tikt.
+
+Eenmalig: in Supabase **Edge Functions › Deploy a new function › Via editor**, naam precies `ai-hulp`, plak de inhoud van `supabase/functions/ai-hulp/index.ts` en klik op Deploy.
+
+Wat naar Google gaat: voor categorieën enkel de omschrijving, het soort verrichting en het bedrag (geen rekeningnummers); voor de inzichten enkel totalen per categorie en de grootste uitgaven. Let op: bij de gratis versie mag Google wat je stuurt gebruiken om zijn AI te verbeteren.
+Lukt de AI niet (niet ingesteld, gratis limiet op, geen internet), dan werkt alles gewoon zoals voordien.
 
 ### Privé of zaak? met AI (Gemini) aanzetten
 

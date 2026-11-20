@@ -5,6 +5,7 @@ import { categoriesFor } from '../lib/categories.js';
 import { apiClosing, closingBalance, markDuplicates, readBankApi, readBankCSV, shiftDate, NEAR_BEFORE, NEAR_AFTER } from '../lib/bankimport.js';
 import { dayLabel, money, todayISO } from '../lib/format.js';
 import { store } from '../lib/store.js';
+import { aiCategoryRequest, applyAiCategories, chunks, rowsForAi } from '../lib/ai.js';
 
 const NAMES_KEY = 'boekje-eigen-namen';
 const PAGE = 80;
@@ -33,10 +34,31 @@ export default function BankImport({ household, isOwner, onBack, onDone, bankRet
   const [tab, setTab] = useState('nieuw');
   const input = useRef(null);
   const saving = useRef(false); // twee keer snel tikken mag niet twee keer importeren
+  const run = useRef(0); // een nieuw bestand of ander boekje: oude AI-antwoorden negeren
+  const [aiCat, setAiCat] = useState(null); // { state: 'bezig' | 'klaar' | 'fout', n, reden }
+
+  // Wat de vaste regels niet herkennen (categorie "Andere"), laten we de AI (Gemini) voorstellen.
+  async function askAi(list, b, me) {
+    const todo = rowsForAi(list, b);
+    if (!todo.length || store.mode === 'demo' || !store.ai) return;
+    setAiCat({ state: 'bezig', n: todo.length });
+    try {
+      for (const part of chunks(todo, 100)) {
+        const res = await store.ai('categorie', aiCategoryRequest(part, b));
+        if (run.current !== me) return;
+        setRows((rs) => applyAiCategories(rs, res?.items, b));
+      }
+      if (run.current === me) setAiCat({ state: 'klaar' });
+    } catch (e) {
+      if (run.current === me) setAiCat({ state: 'fout', reden: e.reden || e.message });
+    }
+  }
 
   async function read(f, b = book, n = names) {
     setError('');
     setRows(null);
+    setAiCat(null);
+    const me = ++run.current;
     try {
       const own = n.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
       const r = f.bank
@@ -49,6 +71,7 @@ export default function BankImport({ household, isOwner, onBack, onDone, bankRet
       setClosing(f.bank ? apiClosing(r.rows, f.bank.balances) : closingBalance(r.rows));
       setRows(marked);
       setShow(PAGE);
+      askAi(marked, b, me);
     } catch (e) {
       setError(e.message);
     }
@@ -78,6 +101,7 @@ export default function BankImport({ household, isOwner, onBack, onDone, bankRet
   const chosen = rows ? rows.filter((r) => r.on) : [];
   const skipped = rows ? rows.filter((r) => !r.on) : [];
   const list = tab === 'nieuw' ? chosen : skipped;
+  const aiCount = rows ? rows.filter((r) => r.catBy === 'ai').length : 0;
   const sumIn = chosen.filter((r) => r.type === 'in').reduce((a, r) => a + r.amount_cents, 0);
   const sumOut = chosen.filter((r) => r.type === 'uit').reduce((a, r) => a + r.amount_cents, 0);
 
@@ -152,6 +176,10 @@ export default function BankImport({ household, isOwner, onBack, onDone, bankRet
             {closing && <span className="tiny muted">Na het importeren rekent de app vanaf deze stand verder.</span>}
           </section>
 
+          {aiCat?.state === 'bezig' && <div className="notice ai-notice"><Icon name="sparkle" size={16} /> Gemini zoekt een categorie voor {aiCat.n} {aiCat.n === 1 ? 'boeking' : 'boekingen'} die de app niet herkende…</div>}
+          {aiCat?.state === 'klaar' && aiCount > 0 && <div className="notice ai-notice"><Icon name="sparkle" size={16} /> Gemini koos een categorie voor {aiCount} {aiCount === 1 ? 'boeking' : 'boekingen'} (met een ✨). Kijk ze even na.</div>}
+          {aiCat?.state === 'fout' && <div className="small muted">Categorieën voorstellen met AI lukte nu niet{aiCat.reden ? `: ${aiCat.reden}` : '.'} Je kan ze gewoon zelf kiezen.</div>}
+
           <div className="seg" role="group" aria-label="Tonen">
             <button aria-pressed={tab === 'nieuw'} onClick={() => { setTab('nieuw'); setShow(PAGE); }}>Importeren ({chosen.length})</button>
             <button aria-pressed={tab === 'over'} onClick={() => { setTab('over'); setShow(PAGE); }}>Overgeslagen ({skipped.length})</button>
@@ -159,7 +187,7 @@ export default function BankImport({ household, isOwner, onBack, onDone, bankRet
 
           <div className="card list">
             {list.slice(0, show).map((r) => (
-              <ImportRow key={r.i} r={r} book={book} onToggle={() => set(r.i, { on: !r.on })} onCat={(c) => set(r.i, { category: c })} />
+              <ImportRow key={r.i} r={r} book={book} onToggle={() => set(r.i, { on: !r.on })} onCat={(c) => set(r.i, { category: c, catBy: 'jij' })} />
             ))}
             {!list.length && <div className="entry small muted">Niets hier.</div>}
           </div>
@@ -190,6 +218,7 @@ function ImportRow({ r, book, onToggle, onCat }) {
         </div>
         <div className="row" style={{ gap: 8 }}>
           <span className="tiny muted" style={{ whiteSpace: r.maybe || r.dup ? 'normal' : 'nowrap' }}>{dayLabel(r.date)}{why ? ` · ${why}` : ''}</span>
+          {r.catBy === 'ai' && <span className="ai-tag" title="Categorie voorgesteld door Gemini">✨</span>}
           <select className="cat-select" value={cats.some((c) => c.id === r.category) ? r.category : cats[cats.length - 1].id} onChange={(e) => onCat(e.target.value)} aria-label="Categorie">
             {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>

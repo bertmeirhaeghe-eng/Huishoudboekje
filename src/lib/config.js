@@ -20,3 +20,6 @@ export const CHORES_FUNCTION = import.meta.env?.VITE_CHORES_FUNCTION || 'klusjes
 
 // Naam (slug) van de Supabase-functie die met AI inschat of iets privé of zaak is.
 export const ADVICE_FUNCTION = import.meta.env?.VITE_ADVICE_FUNCTION || 'prive-of-zaak';
+
+// Naam (slug) van de Supabase-functie die met AI categorieën voorstelt en tips geeft bij de inzichten.
+export const AI_FUNCTION = import.meta.env?.VITE_AI_FUNCTION || 'ai-hulp';

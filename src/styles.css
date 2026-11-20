@@ -562,3 +562,10 @@ details summary { cursor: pointer; }
 @keyframes think { from { background-position: 200% 0; } to { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .think-bar { animation: none; } }
 .ai-tag { margin-top: -4px; }
+
+/* AI-hulp (Gemini) */
+.ai-notice { display: flex; gap: 8px; align-items: flex-start; }
+.ai-notice svg { flex: 0 0 auto; margin-top: 2px; }
+.ai-tag { font-size: 13px; line-height: 1; flex: 0 0 auto; }
+.ai-card { border: 1.5px dashed var(--line, #d9dee5); }
+.ai-card .ai-head { display: flex; gap: 10px; align-items: center; }

@@ -4,6 +4,7 @@ import CatIcon from './CatIcon.jsx';
 import CategorySplit from './CategorySplit.jsx';
 import { store } from '../lib/store.js';
 import { analyze, changeLabel } from '../lib/insights.js';
+import { fromAiInsight, insightFacts } from '../lib/ai.js';
 import { category, tone } from '../lib/categories.js';
 import { money, monthKey, monthLabel, monthShortLabel, shiftMonth } from '../lib/format.js';
 
@@ -101,6 +102,7 @@ export default function Insights({ refresh, household, isOwner, book, setBook, m
               {a.hasBase && <Compare rows={a.rows} scope={a.scope} cap={a.cap} />}
               {a.trend.kind === 'jaren' && a.trend.points.length > 1 && <CategoryYears points={a.trend.points} />}
               <Weekdays values={a.weekday} />
+              <AiTips a={a} book={book} />
               <Tips tips={a.tips} onOpenKitchen={onOpenKitchen} />
             </div>
           </div>
@@ -433,6 +435,63 @@ function Tips({ tips, onOpenKitchen }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+// Tips van Gemini bij precies deze cijfers. Pas op vraag (dat spaart de gratis limiet),
+// en onthouden zolang de app open staat. Lukt het niet, dan blijven gewoon de vaste tips hieronder.
+const aiCache = new Map();
+
+function AiTips({ a, book }) {
+  const key = `${book}|${a.scope}|${a.label}|${a.count}|${a.total.expense}|${a.total.income}`;
+  const [res, setRes] = useState(() => aiCache.get(key) || null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (store.mode === 'demo' || !store.ai) return null;
+
+  async function ask() {
+    setBusy(true);
+    setError('');
+    try {
+      const out = fromAiInsight(await store.ai('inzichten', { book, facts: insightFacts(a, book) }));
+      if (!out) throw new Error('De AI gaf geen bruikbaar antwoord.');
+      aiCache.set(key, out);
+      setRes(out);
+    } catch (e) {
+      setError(e.reden || e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card stack ai-card" style={{ gap: 10 }}>
+      <div className="ai-head">
+        <span className="tile-ico blue" style={{ width: 36, height: 36 }}><Icon name="sparkle" size={18} /></span>
+        <div className="grow">
+          <b>{res ? `${res.bron} kijkt mee` : 'Laat Gemini meekijken'}</b>
+          {!res && <div className="tiny muted">Een korte samenvatting en tips op maat bij deze cijfers.</div>}
+        </div>
+      </div>
+      {res ? (
+        <>
+          {res.summary && <div className="small">{res.summary}</div>}
+          {res.tips.map((t, i) => (
+            <div key={i} className={'tip ' + t.tone} style={{ display: 'flex', gap: 10 }}>
+              <span className="tip-ico"><Icon name={t.tone === 'good' ? 'check' : 'bulb'} size={18} /></span>
+              <div className="grow">
+                <div className="bold small">{t.title}</div>
+                <div className="small muted">{t.text}</div>
+              </div>
+            </div>
+          ))}
+          <span className="tiny muted">Door AI geschreven, kijk zelf even of het klopt.</span>
+        </>
+      ) : (
+        <button className="btn ghost" onClick={ask} disabled={busy}><Icon name="sparkle" /> {busy ? 'Gemini denkt na…' : 'Vraag tips aan Gemini'}</button>
+      )}
+      {error && <div className="small muted">Dat lukte nu niet: {error}</div>}
     </section>
   );
 }
