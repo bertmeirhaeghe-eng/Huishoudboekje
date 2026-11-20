@@ -263,3 +263,88 @@ export function shoppingForWeek(days, menu, recipes, pantry, shopping) {
   }
   return out;
 }
+
+// ───────────── Aantal personen aanpassen ─────────────
+
+const WORD_NUM = { een: 1, één: 1, twee: 2, drie: 3, vier: 4, vijf: 5, zes: 6, zeven: 7, acht: 8, negen: 9, tien: 10, twaalf: 12 };
+const FRAC = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3 };
+const NUM_TOKEN = /^(\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*[½¼¾⅓⅔]|\d+(?:[.,]\d+)?)/;
+
+function readNum(s) {
+  const t = s.replace(/\s+/g, ' ').trim();
+  let m = t.match(/^(\d+) (\d+) ?\/ ?(\d+)$/);
+  if (m) return Number(m[1]) + Number(m[2]) / Number(m[3]);
+  m = t.match(/^(\d+) ?\/ ?(\d+)$/);
+  if (m) return Number(m[2]) ? Number(m[1]) / Number(m[2]) : null;
+  m = t.match(/^(\d*)([½¼¾⅓⅔])$/);
+  if (m) return (Number(m[1]) || 0) + FRAC[m[2]];
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Mooi afronden: grote hoeveelheden op 5 of 10, kleine op een halve of een kwart.
+function niceNum(n, unit) {
+  const u = String(unit || '').toLowerCase();
+  const metric = /^(g|gr|gram|ml|mg|kg|kilo|l|liter|dl|cl)\b/.test(u);
+  if (n >= 1000) return String(Math.round(n / 10) * 10);
+  if (n >= 20) return String(Math.round(n / 5) * 5);
+  if (n >= 10 || (metric && n >= 3)) return String(Math.round(n));
+  if (metric) return String(Math.max(0.25, Math.round(n * 4) / 4)).replace('.', ',');
+  // Stuks, lepels, teentjes: op een kwart, en minstens een kwart.
+  const q = Math.max(0.25, Math.round(n * 4) / 4);
+  const whole = Math.floor(q);
+  const part = { 0.25: '¼', 0.5: '½', 0.75: '¾' }[q - whole] || '';
+  return (whole ? String(whole) : '') + part || '¼';
+}
+
+// Een paar eenheden krijgen een meervoud als het er meer dan één wordt (en omgekeerd).
+const PLURAL = { teentje: 'teentjes', teen: 'tenen', blikje: 'blikjes', zakje: 'zakjes', takje: 'takjes', potje: 'potjes', plakje: 'plakjes', kopje: 'kopjes', bosje: 'bosjes', stengel: 'stengels', eetlepel: 'eetlepels', theelepel: 'theelepels', koffielepel: 'koffielepels', pakje: 'pakjes', stuk: 'stuks', sneetje: 'sneetjes', blaadje: 'blaadjes', beker: 'bekers', bekertje: 'bekertjes' };
+const SINGULAR = Object.fromEntries(Object.entries(PLURAL).map(([a, b]) => [b, a]));
+
+function fixUnit(rest, n) {
+  return rest.replace(/^(\s*)([a-zà-ÿ]+)/i, (all, sp, w) => {
+    const low = w.toLowerCase();
+    if (n > 1 && PLURAL[low]) return sp + PLURAL[low];
+    if (n <= 1 && SINGULAR[low]) return sp + SINGULAR[low];
+    return all;
+  });
+}
+
+// "200 g" voor 4 personen -> "300 g" voor 6. Wat geen getal heeft ("snufje", "naar smaak") blijft zoals het is.
+export function scaleQty(qty, factor) {
+  if (!qty || !Number.isFinite(factor) || factor <= 0 || Math.abs(factor - 1) < 1e-9) return qty;
+  const t = String(qty).trim();
+  let lead = null;
+  let rest = '';
+  const m = t.match(NUM_TOKEN);
+  if (m) {
+    lead = [m[1]];
+    rest = t.slice(m[0].length);
+    // Een bereik: "2-3", "2 à 3", "2 tot 3".
+    const r = rest.match(/^\s*(-|–|tot|à|a)\s*/);
+    const r2 = r && rest.slice(r[0].length).match(NUM_TOKEN);
+    if (r2) { lead.push(r[1], r2[1]); rest = rest.slice(r[0].length + r2[0].length); }
+  } else {
+    const w = t.match(/^(anderhalve?|een halve?|een half|halve?|[a-zé]+)\b/i);
+    const low = w && w[1].toLowerCase();
+    let n = null;
+    if (low && /^anderhalve?$/.test(low)) n = 1.5;
+    else if (low && /^(een halve?|een half|halve?)$/.test(low)) n = 0.5;
+    else if (low && WORD_NUM[low]) n = WORD_NUM[low];
+    if (n == null) return qty;
+    lead = [String(n)];
+    rest = t.slice(w[0].length);
+  }
+  const unit = rest.trim().split(/\s+/)[0] || '';
+  const nums = [lead[0], lead[2]].filter((x) => x != null).map(readNum);
+  if (nums.some((x) => x == null)) return qty;
+  const scaled = nums.map((x) => x * factor);
+  const text = scaled.length === 2 ? `${niceNum(scaled[0], unit)}-${niceNum(scaled[1], unit)}` : niceNum(scaled[0], unit);
+  return (text + fixUnit(rest, scaled[scaled.length - 1])).trim();
+}
+
+// Alle ingrediënten van een recept omrekenen van 'from' naar 'to' personen.
+export function scaleIngredients(ingredients, from, to) {
+  const f = Number(from) > 0 && Number(to) > 0 ? Number(to) / Number(from) : 1;
+  return (ingredients || []).map((i) => (i.qty ? { ...i, qty: scaleQty(i.qty, f) } : i));
+}
