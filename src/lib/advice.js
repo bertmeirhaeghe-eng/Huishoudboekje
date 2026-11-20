@@ -144,3 +144,32 @@ export function estimate(topic, cents) {
 }
 
 export const QUICK = ['Laptop', 'Gsm-abonnement', 'Houtskool', 'Restaurant met klant', 'Opleiding', 'Koksvest', 'Auto', 'Kleding', 'Bureaustoel', 'Relatiegeschenk'];
+
+// Antwoord van de AI (Supabase-functie "prive-of-zaak") netjes maken, in dezelfde vorm als een vuistregel.
+// Klopt er iets niet, dan geven we null terug en gebruikt de app de vaste vuistregels.
+const AI_CATS = ['it_materiaal', 'bbq_materiaal', 'ingredienten', 'auto_zaak', 'resto_klant', 'opleiding', 'telefoon', 'boekhouder', 'andere_zaak'];
+const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+export function fromAi(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const verdict = ['zaak', 'deels', 'prive', 'twijfel'].includes(raw.verdict) ? raw.verdict : null;
+  const why = clean(raw.why, 600);
+  if (!verdict || !why) return null;
+  let pct = Number(raw.pct);
+  pct = Number.isFinite(pct) && pct >= 0 && pct <= 100 ? Math.round(pct) : null;
+  if (verdict === 'prive') pct = 0;
+  if (verdict === 'twijfel') pct = null;
+  const tips = (Array.isArray(raw.tips) ? raw.tips : []).map((t) => clean(t, 240)).filter(Boolean);
+  return {
+    id: 'ai',
+    ai: true,
+    bron: clean(raw.bron, 20) || 'AI',
+    verdict,
+    pct,
+    btw: verdict === 'prive' ? false : typeof raw.btw === 'boolean' ? raw.btw : null,
+    cat: AI_CATS.includes(raw.cat) ? raw.cat : 'andere_zaak',
+    title: clean(raw.title, 60) || 'Advies',
+    why,
+    tips: [...new Set(tips)].slice(0, 3),
+  };
+}

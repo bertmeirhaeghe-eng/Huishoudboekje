@@ -556,3 +556,9 @@ details summary { cursor: pointer; }
 .textarea { height: auto; min-height: 70px; padding: 12px 14px; resize: vertical; line-height: 1.4; font-family: inherit; }
 .photo-full { position: fixed; inset: 0; z-index: 60; background: rgba(10, 14, 18, 0.92); display: flex; align-items: center; justify-content: center; padding: 16px; animation: enter 0.2s ease both; }
 .photo-full img { max-width: 100%; max-height: 100%; border-radius: 12px; object-fit: contain; }
+.advice.thinking { border-top-color: var(--blue); }
+.advice.thinking .verdict { align-self: flex-start; background: var(--blue-soft); color: var(--blue); }
+.think-bar { height: 6px; border-radius: 6px; background: linear-gradient(90deg, var(--blue-soft) 0%, var(--blue) 50%, var(--blue-soft) 100%); background-size: 200% 100%; animation: think 1.2s linear infinite; }
+@keyframes think { from { background-position: 200% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .think-bar { animation: none; } }
+.ai-tag { margin-top: -4px; }

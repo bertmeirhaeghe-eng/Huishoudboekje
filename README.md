@@ -81,6 +81,22 @@ Wil je dat Claude echt kijkt wat er staat (ook fruit, potten zonder etiket…), 
 
 Alleen wie aangemeld is in het huishoudboekje kan de functie gebruiken; de sleutel staat nooit in de app zelf.
 
+### Privé of zaak? met AI (Gemini) aanzetten
+
+Het scherm *Privé of zaak?* gebruikt zonder extra instelling vaste vuistregels. Voor iets dat niet in die regels staat (bv. "buitenkeuken") krijg je dan alleen "Hangt ervan af".
+Met een AI-sleutel denkt Google Gemini mee en krijg je een antwoord op maat. Lukt de AI niet (niet ingesteld, even te druk, geen internet), dan toont de app gewoon weer de vaste vuistregels.
+
+Eenmalig instellen (± 5 minuten):
+
+1. Ga naar [aistudio.google.com/apikey](https://aistudio.google.com/apikey), meld je aan met je Google-account en klik op *Create API key*. Kopieer de sleutel.
+2. In Supabase: **Edge Functions › Secrets** › nieuw geheim `GEMINI_API_KEY` met die sleutel.
+3. In Supabase: **Edge Functions › Deploy a new function › Via editor**, naam precies `prive-of-zaak`, plak de inhoud van `supabase/functions/prive-of-zaak/index.ts` en klik op Deploy.
+
+Optioneel: wil je een bepaald Gemini-model, zet dan een geheim `GEMINI_MODEL` (bv. `gemini-flash-lite-latest`). Standaard gebruikt de functie de nieuwste Gemini Flash.
+Heb je geen Gemini-sleutel maar wel `ANTHROPIC_API_KEY` (van de voorraadfoto), dan gebruikt de functie Claude.
+
+Alleen wie aangemeld is in het huishoudboekje kan de functie gebruiken; de sleutel staat nooit in de app zelf. Het blijft een inschatting, geen fiscaal advies.
+
 ### Bank automatisch koppelen (Crelan, gratis via Enable Banking)
 
 Dan hoef je geen CSV-bestanden meer te downloaden: de app haalt je verrichtingen met één tik bij Crelan op. De app kan alleen **lezen**, nooit geld overschrijven. Wat al in het boekje staat (ook van een vroegere CSV-import of wat je zelf insprak) slaat de app over, net zoals bij een bestand. De echte rekeningstand wordt meteen mee bijgewerkt.

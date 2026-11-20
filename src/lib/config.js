@@ -17,3 +17,6 @@ export const BANK_FUNCTION = import.meta.env?.VITE_BANK_FUNCTION || 'bank-koppel
 
 // Naam (slug) van de Supabase-functie die klusjes in Google Agenda zet.
 export const CHORES_FUNCTION = import.meta.env?.VITE_CHORES_FUNCTION || 'klusjes-agenda';
+
+// Naam (slug) van de Supabase-functie die met AI inschat of iets privé of zaak is.
+export const ADVICE_FUNCTION = import.meta.env?.VITE_ADVICE_FUNCTION || 'prive-of-zaak';

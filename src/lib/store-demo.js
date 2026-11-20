@@ -150,6 +150,7 @@ export const demoStore = {
   async setPhotoAlbums() { throw new Error('Foto-albums koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
   async photoAlbumCount() { return 0; },
   async scanPantryPhoto() { const e = new Error('geen-ai'); e.code = 'geen-ai'; throw e; },
+  async adviseAI() { const e = new Error('Proefmodus: geen AI.'); e.code = 'niet-ingesteld'; e.reden = 'In de proefmodus is er geen AI.'; throw e; },
   async albumPhotos() {
     // In de proefmodus kan je zelf foto's klaarzetten (handig om de ruststand te proberen).
     try { return JSON.parse(localStorage.getItem('boekje-demo-fotos') || '[]'); } catch { return []; }
