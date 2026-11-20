@@ -90,14 +90,51 @@ async function googleError(res: Response) {
   return String(msg).replace(/\s+/g, ' ').slice(0, 220);
 }
 
+// Modellen die Google (niet meer) aanbiedt: dan gewoon het volgende proberen.
+const GONE = /no longer available|deprecated|unknown model|models?\/?\S*.{0,40}(not found|does not exist|not supported for generateContent)/i;
+
+// Vaste lijst, nieuwste eerst. Google schrapt geregeld oude modellen; daarom vragen we daarna
+// ook aan Google welke Flash-modellen er nu zijn, zodat het blijft werken als deze lijst verouderd is.
+const GEMINI_MODELS = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3-flash', 'gemini-2.5-flash'];
+
+function geminiModels() {
+  const own = (Deno.env.get('GEMINI_MODEL') || '').trim();
+  return [own, ...GEMINI_MODELS].filter((m, i, a) => m && a.indexOf(m) === i);
+}
+
+// Wat Google nu zelf aanbiedt: Flash-modellen die tekst maken, nieuwste versie eerst.
+async function liveGeminiModels(key: string) {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const ver = (n: string) => Number((n.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || 0);
+    return (data?.models || [])
+      .filter((m: { name?: string; supportedGenerationMethods?: string[] }) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m: { name: string }) => String(m.name).replace(/^models\//, ''))
+      .filter((n: string) => /^gemini-[\d.]+-flash(-lite)?$/.test(n) || /^gemini-[\d.]+-flash(-lite)?-(\d{3}|preview)/.test(n))
+      .filter((n: string) => !/(tts|image|audio|live|thinking-exp)/.test(n))
+      .sort((a: string, b: string) => ver(b) - ver(a) || Number(/lite/.test(a)) - Number(/lite/.test(b)) || Number(/preview/.test(a)) - Number(/preview/.test(b)))
+      .slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
 // Gemini: eerst het model uit het geheim GEMINI_MODEL (als dat er is), anders de "laatste Flash".
 // Bestaat een model niet (meer) of weigert het de vraag, dan proberen we het volgende.
 // Lukt het met het vaste antwoordschema niet, dan vragen we gewoon om JSON.
 async function askGemini(key: string, parts: unknown[]) {
-  const own = (Deno.env.get('GEMINI_MODEL') || '').trim();
-  const models = [own, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'].filter((m, i, a) => m && a.indexOf(m) === i);
+  const models = geminiModels();
+  const tried = new Set<string>();
   let last: AiError | null = null;
-  for (const model of models) {
+  // De eerste "echte" fout bewaren: die zegt meer dan "dit oude model bestaat niet meer".
+  let real: AiError | null = null;
+  let live = false;
+  for (let k = 0; k < models.length; k++) {
+    const model = models[k];
+    if (tried.has(model)) continue;
+    tried.add(model);
     for (const withSchema of [true, false]) {
       const generationConfig: Record<string, unknown> = { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' };
       if (withSchema) generationConfig.responseSchema = GEMINI_SCHEMA;
@@ -118,6 +155,8 @@ async function askGemini(key: string, parts: unknown[]) {
           throw new AiError(res.status, `Gemini ${res.status}: ${msg}`, msg);
         }
         last = new AiError(res.status, `Gemini ${model} ${res.status}: ${msg}`, msg);
+        if (res.status === 404 || GONE.test(msg)) break; // dit model bestaat niet (meer): volgend model
+        real = real || last;
         if (res.status === 400 && withSchema) continue; // nog eens zonder schema
         break; // volgend model
       }
@@ -128,6 +167,7 @@ async function askGemini(key: string, parts: unknown[]) {
         const why = data?.promptFeedback?.blockReason || cand?.finishReason || 'leeg';
         console.error(`voorraad-foto: ${model} gaf geen tekst (${why})`);
         last = new AiError(422, `Gemini ${model}: geen tekst (${why})`, `Gemini gaf geen tekst (${why})`);
+        real = real || last;
         break;
       }
       try {
@@ -135,10 +175,16 @@ async function askGemini(key: string, parts: unknown[]) {
       } catch (e) {
         console.error(`voorraad-foto: ${model} antwoord niet leesbaar: ${out.slice(0, 300)}`);
         last = e instanceof AiError ? e : new AiError(422, String(e), 'het antwoord was geen geldig formaat');
+        real = real || last;
       }
     }
+    // Alles uit de vaste lijst geprobeerd: vraag Google welke modellen er nu zijn en probeer die ook.
+    if (k === models.length - 1 && !live) {
+      live = true;
+      models.push(...(await liveGeminiModels(key)).filter((m: string) => !tried.has(m)));
+    }
   }
-  throw last || new AiError(404, 'Geen Gemini-model gevonden.', 'geen Gemini-model gevonden');
+  throw real || last || new AiError(404, 'Geen Gemini-model gevonden.', 'geen Gemini-model gevonden');
 }
 
 async function askClaude(key: string, image: string, mediaType: string, question: string) {
