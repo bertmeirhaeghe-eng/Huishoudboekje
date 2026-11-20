@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { PotIllustration } from './Illustrations.jsx';
-import { addDays, checkIngredients, ingredientLine, mealFor, mealsOn, mondayOf, parseIngredient, parseRecipeText, shoppingForWeek, SLOT_LABEL, SLOTS, slotOf, weekDays } from '../lib/kitchen.js';
+import { addDays, checkIngredients, ingredientLine, mealFor, mealsOn, mondayOf, parseIngredient, parseRecipeText, scaleIngredients, shoppingForWeek, SLOT_LABEL, SLOTS, slotOf, weekDays } from '../lib/kitchen.js';
 import { todayISO } from '../lib/format.js';
+import { fromAiRecipe } from '../lib/ai.js';
+import { store } from '../lib/store.js';
 
 const DAY = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 const DAY_LONG = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
@@ -31,7 +33,7 @@ export default function Kitchen({ home, tab, setTab, toast, openRecipe, setOpenR
 
   const recipe = openRecipe && home.recipes.find((r) => r.id === openRecipe);
   if (recipe) {
-    return <RecipeView home={home} recipe={recipe} toast={toast} onBack={() => setOpenRecipe(null)} onEdit={() => setEditing(recipe)} />;
+    return <RecipeView key={recipe.id} home={home} recipe={recipe} toast={toast} onBack={() => setOpenRecipe(null)} onEdit={() => setEditing(recipe)} />;
   }
 
   return (
@@ -225,7 +227,22 @@ const STATE = {
 function RecipeView({ home, recipe, toast, onBack, onEdit }) {
   const [plan, setPlan] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const checked = checkIngredients(recipe.ingredients || [], home.pantry, home.shopping);
+  const base = recipe.servings || null;
+  const [people, setPeople] = useState(base || 4);
+  const [savingPeople, setSavingPeople] = useState(false);
+  const scaled = base && people !== base;
+  const ingredients = scaled ? scaleIngredients(recipe.ingredients || [], base, people) : recipe.ingredients || [];
+  const checked = checkIngredients(ingredients, home.pantry, home.shopping);
+
+  async function keepPeople() {
+    setSavingPeople(true);
+    try {
+      await home.act.saveRecipe({ ...recipe, servings: people, ingredients: base ? ingredients : recipe.ingredients });
+      toast(base ? `Recept bewaard voor ${people} ${people === 1 ? 'persoon' : 'personen'}` : 'Aantal personen bewaard');
+    } finally {
+      setSavingPeople(false);
+    }
+  }
   const toBuy = checked.filter((i) => i.state === 'kopen' || i.state === 'bijna');
 
   return (
@@ -237,8 +254,30 @@ function RecipeView({ home, recipe, toast, onBack, onEdit }) {
       {recipe.photo && <img className="recipe-hero" src={recipe.photo} alt="" />}
       <div>
         <h1>{recipe.title}</h1>
-        {recipe.servings && <span className="small muted">Voor {recipe.servings} {recipe.servings === 1 ? 'persoon' : 'personen'}</span>}
       </div>
+
+      <section className="card stack" style={{ gap: 10 }} aria-label="Aantal personen">
+        <div className="spread" style={{ gap: 12 }}>
+          <span className="stack" style={{ gap: 2 }}>
+            <b>{base ? 'Voor hoeveel personen?' : 'Voor hoeveel personen is dit recept?'}</b>
+            <span className="tiny muted">
+              {!base ? 'Dan kan ik de hoeveelheden omrekenen.' : scaled ? `Omgerekend van ${base} naar ${people} personen` : `Het recept is voor ${base} ${base === 1 ? 'persoon' : 'personen'}`}
+            </span>
+          </span>
+          <span className="row" style={{ gap: 6, alignItems: 'center', flex: 'none' }}>
+            <button className="icon-btn" onClick={() => setPeople((n) => Math.max(1, n - 1))} disabled={people <= 1} aria-label="Eén persoon minder" style={{ background: 'var(--bg)' }}><Icon name="minus" /></button>
+            <b style={{ minWidth: 34, textAlign: 'center', fontSize: 22 }} aria-live="polite" aria-label={`${people} ${people === 1 ? 'persoon' : 'personen'}`}>{people}</b>
+            <button className="icon-btn" onClick={() => setPeople((n) => Math.min(30, n + 1))} disabled={people >= 30} aria-label="Eén persoon meer" style={{ background: 'var(--bg)' }}><Icon name="plus" /></button>
+          </span>
+        </div>
+        {!base && <button className="btn ghost" disabled={savingPeople} onClick={keepPeople} style={{ minHeight: 44 }}><Icon name="check" size={18} /> Dit recept is voor {people} {people === 1 ? 'persoon' : 'personen'}</button>}
+        {scaled && (
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn ghost grow" onClick={() => setPeople(base)} style={{ minHeight: 44, padding: '0 10px' }}>Terug naar {base}</button>
+            <button className="btn ghost grow" disabled={savingPeople} onClick={keepPeople} style={{ minHeight: 44, padding: '0 10px' }}>Bewaar voor {people}</button>
+          </div>
+        )}
+      </section>
 
       <section className="card stack" style={{ gap: 4 }}>
         <div className="spread" style={{ marginBottom: 6 }}>
@@ -327,13 +366,17 @@ function RecipeEditor({ recipe, onCancel, onSave }) {
   const [pasted, setPasted] = useState('');
   const [ocr, setOcr] = useState(null); // { step, pct }
   const [error, setError] = useState('');
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const cam = useRef(null);
   const gal = useRef(null);
   const isNew = !recipe.id;
 
   function fill(text) {
-    const r = parseRecipeText(text);
+    return put(parseRecipeText(text));
+  }
+
+  function put(r) {
     if (r.title && !title.trim()) setTitle(r.title);
     if (r.servings && !servings) setServings(String(r.servings));
     if (r.ingredients.length) setIngs((v) => (v.trim() ? v.trim() + '\n' : '') + r.ingredients.map(ingredientLine).join('\n'));
@@ -341,15 +384,42 @@ function RecipeEditor({ recipe, onCancel, onSave }) {
     return r;
   }
 
+  // Eerst laat ik de AI (Gemini) het recept lezen. Lukt dat niet, dan leest de telefoon zelf de tekst.
+  async function readWithAi(file) {
+    if (store.mode === 'demo' || !store.ai) return { r: null, why: '' };
+    try {
+      setOcr({ step: 'ai', pct: 0 });
+      const { prepareImage } = await import('../lib/pantryphoto.js');
+      const img = await prepareImage(file, 2000);
+      const r = fromAiRecipe(await store.ai('recept', { image: img.data, mediaType: img.mediaType }));
+      return { r, why: r ? '' : 'De AI vond geen recept op de foto.' };
+    } catch (e) {
+      const why = e.code === 'druk'
+        ? 'De AI is even te druk.'
+        : /onbekende vraag/i.test(e.reden || e.message || '')
+          ? 'De AI-hulp in Supabase is nog de oude versie.'
+          : e.reden || '';
+      return { r: null, why };
+    }
+  }
+
   async function onPhoto(file) {
     if (!file) return;
     setError('');
+    setNote('');
     try {
       const { thumbnail, readText } = await import('../lib/ocr.js');
       if (!photo) setPhoto(await thumbnail(file));
+      const ai = await readWithAi(file);
+      if (ai.r) {
+        put(ai.r);
+        setNote(`Ingelezen door ${ai.r.bron}.`);
+        return;
+      }
       setOcr({ step: 'laden', pct: 0 });
       const text = await readText(file, setOcr);
       const r = fill(text);
+      if (ai.why) setNote(`${ai.why} Ik las de foto daarom zelf, kijk alles goed na.`);
       if (!r.ingredients.length && !r.steps) setError('Ik kon weinig lezen op deze foto. Probeer een scherpere foto, recht van boven en met genoeg licht. Of plak de tekst.');
     } catch (e) {
       setError(/fetch|network|load/i.test(e.message || '') ? 'Het leesprogramma kon niet laden. De eerste keer heb je internet nodig.' : e.message || 'Lezen lukte niet.');
@@ -399,8 +469,10 @@ function RecipeEditor({ recipe, onCancel, onSave }) {
 
       {ocr && (
         <div className="card stack" style={{ gap: 8 }} aria-live="polite">
-          <span className="small bold">{ocr.step === 'laden' ? 'Leesprogramma klaarzetten… (de eerste keer duurt dit even)' : 'Ik lees het recept…'}</span>
-          <div className="meter"><span style={{ width: `${ocr.step === 'laden' ? Math.max(5, ocr.pct / 3) : 33 + ocr.pct * 0.67}%`, animation: 'none', transition: 'width .3s' }} /></div>
+          <span className="small bold">{ocr.step === 'ai' ? 'De AI leest het recept…' : ocr.step === 'laden' ? 'Leesprogramma klaarzetten… (de eerste keer duurt dit even)' : 'Ik lees het recept…'}</span>
+          {ocr.step === 'ai'
+            ? <div className="meter"><span className="busy" style={{ width: '60%' }} /></div>
+            : <div className="meter"><span style={{ width: `${ocr.step === 'laden' ? Math.max(5, ocr.pct / 3) : 33 + ocr.pct * 0.67}%`, animation: 'none', transition: 'width .3s' }} /></div>}
         </div>
       )}
 
@@ -413,6 +485,7 @@ function RecipeEditor({ recipe, onCancel, onSave }) {
       )}
 
       {error && <div className="error">{error}</div>}
+      {note && !error && <span className="small muted" aria-live="polite"><Icon name="sparkle" size={16} /> {note}</span>}
 
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <label className="field grow">Naam<input className="input" value={title} maxLength={120} placeholder="bv. Spaghetti bolognese" onChange={(e) => setTitle(e.target.value)} /></label>

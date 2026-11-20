@@ -1,6 +1,7 @@
-// Supabase Edge Function "ai-hulp": Google Gemini helpt het huishoudboekje met twee dingen.
+// Supabase Edge Function "ai-hulp": Google Gemini helpt het huishoudboekje met drie dingen.
 //   action "categorie": voor verrichtingen van de bank de best passende categorie kiezen.
 //   action "inzichten": bij de cijfers van een maand of jaar een korte samenvatting en tips geven.
+//   action "recept":    een foto van een recept (boek, tijdschrift, scherm) inlezen.
 // Standaard met Google Gemini (geheim GEMINI_API_KEY, gratis versie). Staat er geen Gemini-sleutel,
 // of lukt Gemini niet, en staat er wel ANTHROPIC_API_KEY, dan gebruikt ze Claude.
 // De sleutels staan als geheim in Supabase, nooit in de app zelf.
@@ -39,7 +40,8 @@ async function googleError(res: Response) {
   return String(msg).replace(/\s+/g, ' ').slice(0, 220);
 }
 
-type Task = { system: string; user: string; gemini: unknown; claude: unknown; tokens: number };
+// image: een foto als base64 (zonder "data:...;base64," ervoor), voor het inlezen van recepten.
+type Task = { system: string; user: string; gemini: unknown; claude: unknown; tokens: number; image?: { data: string; mediaType: string } };
 
 // Gemini: eerst het model uit het geheim GEMINI_MODEL (als dat er is), anders de "laatste Flash".
 // Bestaat een model niet (meer) of weigert het de vraag, dan proberen we het volgende.
@@ -58,7 +60,7 @@ async function askGemini(key: string, t: Task) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: t.system }] },
-          contents: [{ role: 'user', parts: [{ text: t.user }] }],
+          contents: [{ role: 'user', parts: t.image ? [{ inlineData: { mimeType: t.image.mediaType, data: t.image.data } }, { text: t.user }] : [{ text: t.user }] }],
           generationConfig,
         }),
       });
@@ -102,11 +104,17 @@ async function askClaude(key: string, t: Task) {
       max_tokens: Math.min(t.tokens, 8000),
       output_config: { effort: 'low', format: { type: 'json_schema', schema: t.claude } },
       system: t.system,
-      messages: [{ role: 'user', content: t.user }],
+      messages: [{
+        role: 'user',
+        content: t.image
+          ? [{ type: 'image', source: { type: 'base64', media_type: t.image.mediaType, data: t.image.data } }, { type: 'text', text: t.user }]
+          : t.user,
+      }],
     }),
   });
   if (!res.ok) throw new AiError(res.status, `Claude ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
+  if (data?.stop_reason === 'refusal') throw new AiError(422, 'Claude weigerde de vraag.', 'de AI kon dit niet bekijken');
   const text = (data?.content || []).find((b: { type: string }) => b.type === 'text')?.text;
   if (!text) throw new AiError(422, 'Claude gaf geen antwoord.');
   return { ...parseJson(text), bron: 'Claude' };
@@ -243,6 +251,68 @@ async function inzichten(body: Record<string, unknown>) {
   return json({ samenvatting, tips, bron: out.bron });
 }
 
+// ───────────── Recept van een foto ─────────────
+
+const RECIPE_SYSTEM = `Je helpt een Vlaams gezin hun recepten bij te houden. Je krijgt een foto van een recept: uit een kookboek, tijdschrift, een handgeschreven briefje of een scherm.
+Lees het recept over, zo letterlijk mogelijk, in het Nederlands.
+- titel: de naam van het gerecht. Zonder hoofdletters overal, gewoon zoals een zin ("Spaghetti bolognese").
+- personen: voor hoeveel personen of porties het recept is, als getal. Staat het er niet, geef 0.
+- ingredienten: elk ingrediënt apart, in de volgorde van het recept.
+  hoeveelheid: het getal met de eenheid, kort ("200 g", "2 el", "1,5 dl", "3", "1 teentje", "1 snufje"). Breuken als "1/2" of "½". Geen hoeveelheid: lege tekst.
+  naam: enkel het product, kort en met kleine letter ("bloem", "rode ui", "kippenbouillon").
+  opmerking: wat er nog bij staat, zoals "fijngesneden" of "naar smaak". Anders lege tekst.
+  Staan er ingrediënten in groepjes (bv. "voor de saus"), zet ze dan gewoon allemaal in de lijst.
+- stappen: de bereiding, één stap per element, zonder nummer ervoor. Lange alinea's mag je in logische stappen knippen.
+- Is de tekst in een andere taal, vertaal dan naar het Nederlands en reken Amerikaanse maten (cups, oz) niet om.
+- Verzin niets: wat je niet kunt lezen, laat je weg. Staat er geen recept op de foto, geef dan een lege titel en lege lijsten.
+Antwoord enkel met een JSON-object met de velden titel, personen, ingredienten en stappen.`;
+
+function recipeTask(image: { data: string; mediaType: string }): Task {
+  return {
+    system: RECIPE_SYSTEM,
+    user: 'Lees het recept op deze foto in.',
+    image,
+    tokens: 16384,
+    gemini: {
+      type: 'OBJECT',
+      properties: {
+        titel: { type: 'STRING' },
+        personen: { type: 'INTEGER' },
+        ingredienten: { type: 'ARRAY', items: { type: 'OBJECT', properties: { hoeveelheid: { type: 'STRING' }, naam: { type: 'STRING' }, opmerking: { type: 'STRING' } }, required: ['hoeveelheid', 'naam', 'opmerking'], propertyOrdering: ['hoeveelheid', 'naam', 'opmerking'] } },
+        stappen: { type: 'ARRAY', items: { type: 'STRING' } },
+      },
+      required: ['titel', 'personen', 'ingredienten', 'stappen'],
+      propertyOrdering: ['titel', 'personen', 'ingredienten', 'stappen'],
+    },
+    claude: {
+      type: 'object',
+      properties: {
+        titel: { type: 'string' },
+        personen: { type: 'integer' },
+        ingredienten: { type: 'array', items: { type: 'object', properties: { hoeveelheid: { type: 'string' }, naam: { type: 'string' }, opmerking: { type: 'string' } }, required: ['hoeveelheid', 'naam', 'opmerking'], additionalProperties: false } },
+        stappen: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['titel', 'personen', 'ingredienten', 'stappen'],
+      additionalProperties: false,
+    },
+  };
+}
+
+async function recept(body: Record<string, unknown>) {
+  // De foto als base64. "image" is de naam die de app gebruikt; "data" aanvaarden we ook.
+  const data = String(body.image || body.data || '').replace(/^data:[^,]*,/, '');
+  if (!data) return json({ error: 'fout', reden: 'Geen foto ontvangen.' }, 400);
+  if (data.length > 7_000_000) return json({ error: 'fout', reden: 'De foto is te groot.' }, 400);
+  const mediaType = ['image/jpeg', 'image/png', 'image/webp'].includes(String(body.mediaType)) ? String(body.mediaType) : 'image/jpeg';
+  const out = await ask(recipeTask({ data, mediaType }));
+  const ingredienten = (Array.isArray(out.ingredienten) ? out.ingredienten : []).slice(0, 60)
+    .map((i: Record<string, unknown>) => ({ hoeveelheid: clean(i?.hoeveelheid, 30), naam: clean(i?.naam, 80), opmerking: clean(i?.opmerking, 80) }))
+    .filter((i: { naam: string }) => i.naam);
+  const stappen = (Array.isArray(out.stappen) ? out.stappen : []).slice(0, 40).map((s: unknown) => clean(s, 1200)).filter(Boolean);
+  const personen = Math.max(0, Math.min(99, Math.round(Number(out.personen) || 0)));
+  return json({ titel: clean(out.titel, 120), personen, ingredienten, stappen, bron: out.bron });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Alleen POST.' }, 405);
@@ -265,6 +335,7 @@ Deno.serve(async (req) => {
   try {
     if (body.action === 'categorie') return await categorie(body);
     if (body.action === 'inzichten') return await inzichten(body);
+    if (body.action === 'recept') return await recept(body);
     return json({ error: 'fout', reden: 'Onbekende vraag.' }, 400);
   } catch (e) {
     // De echte fout komt in de Logs van de functie in Supabase.

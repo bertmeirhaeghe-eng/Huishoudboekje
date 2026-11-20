@@ -99,3 +99,27 @@ export function fromAiInsight(raw) {
   if (!summary && !tips.length) return null;
   return { summary, tips, bron: clean(raw.bron, 20) || 'AI' };
 }
+
+// ───────────── Recept van een foto ─────────────
+
+// Antwoord van de AI omzetten naar wat het receptscherm verwacht. Niets bruikbaars: null.
+export function fromAiRecipe(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = clean(raw.titel, 120).replace(/[.:]+$/, '') || null;
+  const n = Math.round(Number(raw.personen));
+  const servings = n > 0 && n < 100 ? n : null;
+  const ingredients = (Array.isArray(raw.ingredienten) ? raw.ingredienten : [])
+    .map((i) => {
+      const name = clean(i?.naam, 80).replace(/[.;:,]+$/, '');
+      if (!name) return null;
+      return { qty: clean(i?.hoeveelheid, 30) || null, name: name.charAt(0).toLowerCase() + name.slice(1), note: clean(i?.opmerking, 80) || null };
+    })
+    .filter(Boolean)
+    .slice(0, 60);
+  const steps = (Array.isArray(raw.stappen) ? raw.stappen : [])
+    .map((s) => clean(s, 1200).replace(/^(\d+[.)]|stap\s*\d+[:.]?)\s*/i, ''))
+    .filter(Boolean)
+    .join('\n');
+  if (!ingredients.length && !steps) return null;
+  return { title, servings, ingredients, steps, bron: clean(raw.bron, 20) || 'AI' };
+}

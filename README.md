@@ -86,10 +86,11 @@ Met dezelfde Gemini-sleutel kan de app ook:
 
 - **Bij het importeren van de bank** een categorie kiezen voor verrichtingen die de vaste regels niet herkennen (die in "Andere" zouden vallen). Ze krijgen een ✨, je kijkt ze na voor je importeert.
 - **Bij de inzichten** een korte samenvatting en tips op maat schrijven. Dat gebeurt pas als je op *Vraag tips aan Gemini* tikt.
+- **Bij een nieuw recept** de foto van het recept inlezen: titel, aantal personen, ingrediënten en bereiding. Lukt dat niet, dan leest de telefoon de tekst zelf, zoals voordien.
 
-Eenmalig: in Supabase **Edge Functions › Deploy a new function › Via editor**, naam precies `ai-hulp`, plak de inhoud van `supabase/functions/ai-hulp/index.ts` en klik op Deploy.
+Eenmalig: in Supabase **Edge Functions › Deploy a new function › Via editor**, naam precies `ai-hulp` (bestaat ze al: open ze, tab *Code*, alles vervangen), plak de inhoud van `supabase/functions/ai-hulp/index.ts` en klik op Deploy.
 
-Wat naar Google gaat: voor categorieën enkel de omschrijving, het soort verrichting en het bedrag (geen rekeningnummers); voor de inzichten enkel totalen per categorie en de grootste uitgaven. Let op: bij de gratis versie mag Google wat je stuurt gebruiken om zijn AI te verbeteren.
+Wat naar Google gaat: voor categorieën enkel de omschrijving, het soort verrichting en het bedrag (geen rekeningnummers); voor de inzichten enkel totalen per categorie en de grootste uitgaven; voor recepten de foto van het recept. Let op: bij de gratis versie mag Google wat je stuurt gebruiken om zijn AI te verbeteren.
 Lukt de AI niet (niet ingesteld, gratis limiet op, geen internet), dan werkt alles gewoon zoals voordien.
 
 ### Privé of zaak? met AI (Gemini) aanzetten
