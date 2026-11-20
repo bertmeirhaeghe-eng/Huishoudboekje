@@ -1,6 +1,6 @@
 // Gedeelde gegevens via Supabase. De beveiliging zit in de database-regels (supabase/schema.sql).
 import { createClient } from '@supabase/supabase-js';
-import { BANK_FUNCTION, PANTRY_FUNCTION } from './config.js';
+import { BANK_FUNCTION, CHORES_FUNCTION, PANTRY_FUNCTION } from './config.js';
 
 export function createSupabaseStore(url, anonKey) {
   const sb = createClient(url, anonKey, {
@@ -189,6 +189,34 @@ export function createSupabaseStore(url, anonKey) {
       throw e;
     },
 
+    // Klusjes: zonder de grote foto (die halen we pas op als je een klusje opent).
+    async listChores(hid) {
+      return must(await sb.from('chores')
+        .select('id, household_id, title, note, thumb, planned_date, planned_time, done, done_at, gcal_event_id, gcal_dirty, created_at')
+        .eq('household_id', hid).limit(2000));
+    },
+    async chorePhoto(id) {
+      return must(await sb.from('chores').select('photo').eq('id', id).maybeSingle())?.photo || null;
+    },
+    // Klusjes in Google Agenda (Supabase-functie "klusjes-agenda").
+    // action: status | start | finish | calendars | set-calendar | sync | remove | unlink.
+    // Een fout heeft .code (bv. 'niet-ingesteld', 'verlopen', 'niet-gekoppeld').
+    async choresAgenda(action, body = {}) {
+      const { data, error } = await sb.functions.invoke(CHORES_FUNCTION, { body: { action, ...body } });
+      if (!error) return data;
+      const res = error.context;
+      let code = '';
+      let reden = '';
+      try { const b = await res.json(); code = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
+      if (!code) {
+        if (res?.status === 404) { code = 'niet-ingesteld'; reden = 'De functie klusjes-agenda is nog niet geplaatst in Supabase.'; }
+        else if (error.name !== 'FunctionsHttpError') { code = 'niet-ingesteld'; reden = 'De functie klusjes-agenda is niet bereikbaar.'; }
+      }
+      const e = new Error(reden || 'Google Agenda bijwerken lukte niet.');
+      e.code = code || 'fout';
+      throw e;
+    },
+
     // Live: als een gezinslid iets toevoegt, ververst het scherm vanzelf.
     subscribe(hid, fn, tables = ['entries', 'budgets']) {
       // Elke keer een eigen kanaal: Supabase geeft bij dezelfde naam het bestaande (al gestarte) kanaal terug,
@@ -217,7 +245,7 @@ function saveLocalBalance(row) {
   return 'toestel';
 }
 
-const HOME_TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
+const HOME_TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days', 'chores'];
 function check(table) {
   if (!HOME_TABLES.includes(table)) throw new Error('Onbekende lijst: ' + table);
 }
@@ -236,6 +264,8 @@ function translate(msg) {
   if (/photo albums: invalid link/i.test(m)) return 'Dat is geen link naar een gedeeld Google Foto\'s-album. Die begint met https://photos.app.goo.gl/ of https://photos.google.com/share/.';
   if (/function .*(calendar_ics|has_calendar|set_calendar_url).* does not exist|Could not find the function/i.test(m)) return 'De database mist nog de agenda-functies. Voer schema.sql opnieuw uit in Supabase.';
   if (/invite code/i.test(m)) return 'Die uitnodigingscode bestaat niet.';
+  if (/chores/i.test(m) && /does not exist|Could not find the table|schema cache/i.test(m)) return 'De database mist nog de tabel voor klusjes. Voer schema.sql opnieuw uit in Supabase.';
+  if (/chores_photo_check|chores_thumb_check/i.test(m)) return 'Deze foto is te groot. Probeer een andere.';
   if (/relation .* does not exist|Could not find the table/i.test(m)) return 'De database mist nog de nieuwe tabellen. Voer schema.sql opnieuw uit in Supabase.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Geen verbinding. Probeer het zo meteen opnieuw.';
   return m;

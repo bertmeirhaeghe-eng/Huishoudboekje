@@ -100,6 +100,19 @@ export function splitItems(text) {
 
 // ───────────── Alles samen ─────────────
 
+// ───────────── Klusjes ─────────────
+
+const KLUS_RE = new RegExp(W('klus(?:je|jes|sen)?|klusjeslijst(?:je)?|klussenlijst(?:je)?'));
+const KLUS_EDGE = new Set(['zet', 'zetten', 'voeg', 'toe', 'toevoegen', 'op', 'aan', 'bij', 'in', 'de', 'het', 'mijn', 'onze', 'ons', 'een', 'nieuw', 'nieuwe', 'er', 'nog', 'ook', 'moet', 'moeten', 'gebeuren', 'gedaan', 'worden', 'we', 'wij', 'ik', 'plan', 'inplannen', 'noteer', 'noteren', 'lijst', 'lijstje', 'om', 'uur', 'graag', 'is', 'dat', 'die', 'voor', 'en']);
+
+function choreTitle(lower, ...matches) {
+  let t = cutOut(lower, ...matches).replace(new RegExp(KLUS_RE.source, 'g'), ' ');
+  const words = tidy(t).split(' ').filter(Boolean);
+  while (words.length && KLUS_EDGE.has(words[0])) words.shift();
+  while (words.length && KLUS_EDGE.has(words[words.length - 1])) words.pop();
+  return words.join(' ');
+}
+
 const MENU_RE = new RegExp(W('(?:week)?menu|(?:eten|koken|maken|bakken)\\s+we|we\\s+(?:eten|koken|maken)|gaan\\s+we\\s+(?:eten|koken)|wat\\s+eten\\s+we'));
 const AGENDA_RE = new RegExp(W('agenda|kalender|afspraak|afspraken|herinner(?:ing)?|plan|inplannen'));
 const EURO_RE = /(?:€|\beuro\b|\beur\b)/;
@@ -109,6 +122,14 @@ export function parseCommand(raw, { today = todayISO(), recipes = [], members = 
   if (!text) return null;
   const lower = digitize(text.toLowerCase().replace(/\s+/g, ' '));
   const euro = EURO_RE.test(lower);
+
+  // "Klusje: lamp vervangen in de gang", "zet dakgoot kuisen op de klusjeslijst voor zaterdag"
+  if (!euro && KLUS_RE.test(lower)) {
+    const d = findFutureDate(lower, today);
+    const time = d.date ? findTime(lower) : null;
+    const title = choreTitle(lower, d.match, time?.match);
+    if (title) return { kind: 'klus', title: cap(title), date: d.date, time: time?.time || null, text };
+  }
 
   // "De melk is op", "we hebben geen eieren meer"
   if (!euro && OUT_RE.test(lower) && !MENU_RE.test(lower)) {

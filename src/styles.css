@@ -539,3 +539,20 @@ details summary { cursor: pointer; }
 /* Knop onderaan de saldokaart (rekeningstand) */
 .hero-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 8px 14px; min-height: 40px; background: rgba(255, 255, 255, 0.18); color: #fff; font-weight: 700; font-size: 13px; }
 .hero-link:active { background: rgba(255, 255, 255, 0.3); }
+
+/* Klusjes */
+.chore-row { gap: 0; }
+.chore-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 4px 10px 0; border: 0; background: none; text-align: left; min-height: 58px; }
+.chore-body .name { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chore-row.done .chore-body .name { text-decoration: line-through; color: var(--muted); }
+.chore-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
+.chore-sub .when { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--blue); }
+.chore-sub .when.late { color: var(--orange); }
+.chore-sub .when.plan { color: var(--green); }
+.chore-sub .in-agenda { display: inline-flex; align-items: center; gap: 2px; color: var(--green); font-weight: 600; }
+.chore-sub .note { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.chore-photo { border: 0; padding: 0; background: none; flex-shrink: 0; }
+.chore-photo img { width: 112px; height: 112px; border-radius: 16px; object-fit: cover; display: block; }
+.textarea { height: auto; min-height: 70px; padding: 12px 14px; resize: vertical; line-height: 1.4; font-family: inherit; }
+.photo-full { position: fixed; inset: 0; z-index: 60; background: rgba(10, 14, 18, 0.92); display: flex; align-items: center; justify-content: center; padding: 16px; animation: enter 0.2s ease both; }
+.photo-full img { max-width: 100%; max-height: 100%; border-radius: 12px; object-fit: contain; }

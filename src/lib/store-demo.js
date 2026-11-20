@@ -135,6 +135,14 @@ export const demoStore = {
     d.rows.menu_days = list;
     save(d);
   },
+  async listChores() { return ((db().rows || {}).chores || []).map(({ photo, ...c }) => c); },
+  async chorePhoto(id) { return ((db().rows || {}).chores || []).find((c) => c.id === id)?.photo || null; },
+  // Google Agenda voor klusjes kan alleen met Supabase (de sleutel van Google mag niet op het toestel staan).
+  async choresAgenda(action) {
+    if (action === 'status' || action === 'sync') return { ready: false, linked: false, demo: true, synced: 0 };
+    if (action === 'remove') return { ok: true };
+    const e = new Error('In proefmodus kan de app Google Agenda niet koppelen.'); e.code = 'niet-ingesteld'; throw e;
+  },
   async setCalendarUrl() { throw new Error('De agenda koppelen kan alleen als de app aan Supabase gekoppeld is.'); },
   // Proefmodus: een agenda om te proberen kan je klaarzetten in 'boekje-demo-ics'.
   async hasCalendar() { try { return Boolean(localStorage.getItem('boekje-demo-ics')); } catch { return false; } },

@@ -146,3 +146,20 @@ export function CalendarIllustration({ width = 160 }) {
     </svg>
   );
 }
+
+export function ToolboxIllustration({ width = 170 }) {
+  return (
+    <svg className="illu" width={width} viewBox="0 0 200 150" role="img" aria-label="Gereedschapskist">
+      <ellipse cx="100" cy="138" rx="66" ry="7" fill="#16202A" opacity="0.07" />
+      <path d="M78 52V40a8 8 0 0 1 8-8h28a8 8 0 0 1 8 8v12" fill="none" stroke="#16202A" strokeWidth="7" strokeLinecap="round" />
+      <rect x="36" y="52" width="128" height="78" rx="14" fill="#C24E14" />
+      <rect x="36" y="52" width="128" height="26" rx="12" fill="#E06A2C" />
+      <rect x="88" y="70" width="24" height="16" rx="4" fill="#FFE1CF" />
+      <path d="M50 96h100" stroke="#fff" strokeWidth="4" strokeLinecap="round" opacity="0.25" />
+      <g className="float2">
+        <circle cx="156" cy="44" r="20" fill="#0B7A5E" />
+        <path d="M147 44l6 6 12-12" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </g>
+    </svg>
+  );
+}
