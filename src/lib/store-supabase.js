@@ -1,6 +1,6 @@
 // Gedeelde gegevens via Supabase. De beveiliging zit in de database-regels (supabase/schema.sql).
 import { createClient } from '@supabase/supabase-js';
-import { BANK_FUNCTION, CHORES_FUNCTION, PANTRY_FUNCTION } from './config.js';
+import { ADVICE_FUNCTION, BANK_FUNCTION, CHORES_FUNCTION, PANTRY_FUNCTION } from './config.js';
 
 export function createSupabaseStore(url, anonKey) {
   const sb = createClient(url, anonKey, {
@@ -169,6 +169,26 @@ export function createSupabaseStore(url, anonKey) {
         const e = new Error('geen-ai'); e.code = 'geen-ai'; e.reden = reden; throw e;
       }
       throw new Error(msg || 'De foto kon niet bekeken worden.');
+    },
+
+    // Privé of zaak? laten inschatten door de AI (Supabase-functie "prive-of-zaak").
+    // Lukt dat niet (niet ingesteld, te druk, fout), dan krijg je een fout met .code en .reden
+    // en toont de app de vaste vuistregels.
+    async adviseAI(question) {
+      const { data, error } = await sb.functions.invoke(ADVICE_FUNCTION, { body: { question } });
+      if (!error) return data;
+      const res = error.context;
+      let code = '';
+      let reden = '';
+      try { const b = await res.json(); code = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
+      if (!code) {
+        if (res?.status === 404) { code = 'niet-ingesteld'; reden = 'De functie prive-of-zaak is nog niet geplaatst in Supabase.'; }
+        else if (error.name !== 'FunctionsHttpError') { code = 'niet-ingesteld'; reden = 'De functie prive-of-zaak is niet bereikbaar.'; }
+      }
+      const e = new Error(reden || 'De AI gaf geen antwoord.');
+      e.code = code || 'fout';
+      e.reden = reden;
+      throw e;
     },
 
     // Bank rechtstreeks (Supabase-functie "bank-koppeling", via Enable Banking). Alleen lezen.
