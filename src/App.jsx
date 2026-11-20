@@ -27,6 +27,7 @@ import { startsOnBoard } from './lib/prefs.js';
 import { todayISO } from './lib/format.js';
 import { money } from './lib/format.js';
 import { category } from './lib/categories.js';
+import { isChunkError, reloadOnce } from './lib/reload.js';
 
 const CHART_MONTHS = 6;
 
@@ -298,8 +299,18 @@ function Boekje({ household, onHouseholdChange }) {
 class Guard extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { if (isChunkError(error)) reloadOnce(); }
   render() {
     if (!this.state.error) return this.props.children;
+    if (isChunkError(this.state.error)) {
+      return (
+        <div className="card stack" style={{ gap: 10 }}>
+          <b>Er is een nieuwe versie van de app.</b>
+          <span className="small muted">Even opnieuw laden, dan werkt dit scherm weer.</span>
+          <button className="btn" onClick={() => window.location.reload()}>Opnieuw laden</button>
+        </div>
+      );
+    }
     return (
       <div className="card stack" style={{ gap: 10 }}>
         <b>Oei, dit scherm lukt even niet.</b>

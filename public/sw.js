@@ -1,5 +1,5 @@
 // Eenvoudige service worker: de app zelf werkt offline, gegevens komen altijd live van de server.
-const CACHE = 'boekje-v5';
+const CACHE = 'boekje-v6';
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './apple-touch-icon.png'])));
   self.skipWaiting();
@@ -16,8 +16,11 @@ self.addEventListener('fetch', (e) => {
     // Altijd de nieuwste versie ophalen (niet uit de browsercache), zodat updates meteen zichtbaar zijn.
     fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        // Enkel goede antwoorden bewaren (geen "niet gevonden").
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
         return res;
       })
       .catch(() => caches.match(e.request).then((r) => r || caches.match('./index.html')))
