@@ -152,7 +152,8 @@ const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, m
 
 export function fromAi(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const verdict = ['zaak', 'deels', 'prive', 'twijfel'].includes(raw.verdict) ? raw.verdict : null;
+  const vd = norm(raw.verdict).trim();
+  const verdict = ['zaak', 'deels', 'prive', 'twijfel'].includes(vd) ? vd : null;
   const why = clean(raw.why, 600);
   if (!verdict || !why) return null;
   let pct = Number(raw.pct);
