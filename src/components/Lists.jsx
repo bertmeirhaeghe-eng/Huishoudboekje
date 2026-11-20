@@ -5,6 +5,7 @@ import { AISLE_ORDER, aisle } from '../lib/kitchen.js';
 import { splitItems } from '../lib/commands.js';
 
 const PantryPhoto = lazy(() => import('./PantryPhoto.jsx'));
+import Chores from './Chores.jsx';
 
 const PLACES = [
   { id: 'kast', name: 'Kast' },
@@ -18,15 +19,17 @@ const STATUS = {
   op: { label: 'Op', next: 'ok' },
 };
 
-export default function Lists({ home, tab, setTab, toast }) {
+export default function Lists({ home, tab, setTab, toast, googleReturn }) {
+  const chores = home.chores.filter((c) => !c.done).length;
   return (
     <div className="stack" style={{ maxWidth: 720 }}>
-      <h1>{tab === 'voorraad' ? 'Voorraadkast' : 'Boodschappen'}</h1>
+      <h1>{tab === 'voorraad' ? 'Voorraadkast' : tab === 'klusjes' ? 'Klusjes' : 'Boodschappen'}</h1>
       <div className="seg" role="group" aria-label="Lijst">
-        <button aria-pressed={tab !== 'voorraad'} onClick={() => setTab('boodschappen')}>Boodschappen{open(home) ? ` (${open(home)})` : ''}</button>
+        <button aria-pressed={tab !== 'voorraad' && tab !== 'klusjes'} onClick={() => setTab('boodschappen')}>Boodschappen{open(home) ? ` (${open(home)})` : ''}</button>
         <button aria-pressed={tab === 'voorraad'} onClick={() => setTab('voorraad')}>Voorraad</button>
+        <button aria-pressed={tab === 'klusjes'} onClick={() => setTab('klusjes')}>Klusjes{chores ? ` (${chores})` : ''}</button>
       </div>
-      {tab === 'voorraad' ? <Pantry home={home} toast={toast} /> : <Shopping home={home} toast={toast} />}
+      {tab === 'voorraad' ? <Pantry home={home} toast={toast} /> : tab === 'klusjes' ? <Chores home={home} toast={toast} googleReturn={googleReturn} /> : <Shopping home={home} toast={toast} />}
     </div>
   );
 }

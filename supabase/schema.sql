@@ -357,6 +357,50 @@ grant execute on function public.set_photo_albums(text[]) to authenticated;
 grant execute on function public.photo_album_count() to authenticated;
 grant execute on function public.album_photos() to authenticated;
 
+-- ───────────── Klusjes (met Google Agenda) ─────────────
+-- Klusjes voor het hele gezin, eventueel met een foto. Krijgt een klusje een datum, dan zet de
+-- Supabase-functie "klusjes-agenda" het in de gekoppelde Google Agenda (en past het daar mee aan).
+
+create table if not exists public.chores (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 120),
+  note text check (note is null or char_length(note) <= 1000),
+  thumb text check (thumb is null or char_length(thumb) <= 60000),
+  photo text check (photo is null or char_length(photo) <= 700000),
+  planned_date date,
+  planned_time text check (planned_time is null or planned_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  done boolean not null default false,
+  done_at timestamptz,
+  gcal_event_id text,
+  gcal_calendar_id text,
+  gcal_dirty boolean not null default false,
+  created_by uuid default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists chores_household on public.chores (household_id);
+
+alter table public.chores enable row level security;
+drop policy if exists "gezin klusjes" on public.chores;
+create policy "gezin klusjes" on public.chores
+  for all to authenticated using (public.is_member(household_id)) with check (public.is_member(household_id));
+
+-- Hier bewaart de functie "klusjes-agenda" de toestemming van Google. De app zelf kan deze tabel
+-- niet lezen of wijzigen: alleen de functie (met de service-sleutel).
+create table if not exists public.google_links (
+  household_id uuid primary key references public.households(id) on delete cascade,
+  refresh_token text,
+  calendar_id text not null default 'primary',
+  calendar_name text,
+  pending_state text,
+  pending_at timestamptz,
+  linked_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.google_links enable row level security;
+-- Bewust geen policies: rechtstreeks lezen of schrijven kan niet.
+revoke all on public.google_links from anon, authenticated;
+
 -- ───────────── Gezin aanmaken en aansluiten ─────────────
 
 create or replace function public.create_household(p_name text, p_display_name text) returns uuid
@@ -400,4 +444,5 @@ begin
   begin alter publication supabase_realtime add table public.pantry_items; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.recipes; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.menu_days; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.chores; exception when duplicate_object then null; end;
 end $$;

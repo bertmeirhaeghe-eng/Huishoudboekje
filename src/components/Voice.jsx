@@ -7,7 +7,7 @@ import { parseCommand } from '../lib/commands.js';
 
 const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-const EXAMPLES = ['25 euro tanken', 'Gisteren 64,30 bij Delhaize', 'Melk, eieren en brood op de lijst', 'De koffie is op', 'Vrijdag eten we lasagne', 'Zaterdag om 10 uur zwemles'];
+const EXAMPLES = ['25 euro tanken', 'Gisteren 64,30 bij Delhaize', 'Melk, eieren en brood op de lijst', 'De koffie is op', 'Vrijdag eten we lasagne', 'Zaterdag om 10 uur zwemles', 'Klusje: lamp vervangen in de gang'];
 const DAYS = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 
 export default function Voice({ isOwner, recipes = [], members = [], onCancel, onSave, onEdit, onHome }) {
@@ -78,7 +78,7 @@ export default function Voice({ isOwner, recipes = [], members = [], onCancel, o
   const isMoney = !cmd || cmd.kind === 'geld';
   const ok = isMoney
     ? items.length > 0 && items.every((i) => i.amount_cents > 0)
-    : cmd.kind === 'menu' ? Boolean(cmd.meal?.trim()) : cmd.kind === 'agenda' ? Boolean(cmd.title?.trim()) : cmd.items.length > 0;
+    : cmd.kind === 'menu' ? Boolean(cmd.meal?.trim()) : (cmd.kind === 'agenda' || cmd.kind === 'klus') ? Boolean(cmd.title?.trim()) : cmd.items.length > 0;
 
   async function confirm() {
     setBusy(true);
@@ -183,13 +183,14 @@ function Understood({ item, onEdit }) {
   );
 }
 
-const CONFIRM = { lijst: 'Klopt, op de lijst', voorraad: 'Klopt, op de lijst', menu: 'Klopt, op het menu', agenda: 'Klopt, in de agenda' };
+const CONFIRM = { lijst: 'Klopt, op de lijst', voorraad: 'Klopt, op de lijst', menu: 'Klopt, op het menu', agenda: 'Klopt, in de agenda', klus: 'Klopt, op de klusjeslijst' };
 
 const KIND = {
   lijst: { label: 'Boodschappenlijst', icon: 'list', color: 'var(--green)' },
   voorraad: { label: 'Voorraad', icon: 'box', color: 'var(--orange)' },
   menu: { label: 'Weekmenu', icon: 'pot', color: 'var(--orange)' },
   agenda: { label: 'Agenda', icon: 'calendar', color: 'var(--blue)' },
+  klus: { label: 'Klusjes', icon: 'tool', color: 'var(--orange)' },
 };
 
 function HomeCard({ cmd, setCmd, recipes }) {
@@ -223,6 +224,16 @@ function HomeCard({ cmd, setCmd, recipes }) {
             <span className="small bold" style={{ minWidth: 80 }}>{DAYS[new Date(cmd.date + 'T12:00:00').getDay()]}</span>
           </div>
           {cmd.recipe_id && <span className="tiny muted">Recept gevonden: {recipes.find((r) => r.id === cmd.recipe_id)?.title}</span>}
+        </div>
+      )}
+      {cmd.kind === 'klus' && (
+        <div className="stack" style={{ gap: 8 }}>
+          <input className="input" value={cmd.title} maxLength={120} onChange={(e) => set({ title: e.target.value })} aria-label="Klusje" />
+          <div className="row">
+            <input className="input grow" type="date" value={cmd.date || ''} onChange={(e) => set({ date: e.target.value || null, ...(e.target.value ? {} : { time: null }) })} aria-label="Dag (mag leeg)" />
+            {cmd.date && <input className="input" style={{ width: 120 }} type="time" value={cmd.time || ''} onChange={(e) => set({ time: e.target.value || null })} aria-label="Uur" />}
+          </div>
+          <span className="tiny muted">{cmd.date ? `Ingepland op ${DAYS[new Date(cmd.date + 'T12:00:00').getDay()]}${cmd.time ? ` om ${cmd.time}` : ''}, dan komt het ook in de agenda` : 'Nog zonder datum: je kan het later inplannen'}</span>
         </div>
       )}
       {cmd.kind === 'agenda' && (

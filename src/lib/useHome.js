@@ -4,9 +4,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { store } from './store.js';
 import { findInPantry, sameThing, slotOf } from './kitchen.js';
+import { needsAgenda } from './chores.js';
 
 const TABLES = ['shopping_items', 'pantry_items', 'recipes', 'menu_days'];
-const EMPTY = { shopping: [], pantry: [], recipes: [], menu: [] };
+const EMPTY = { shopping: [], pantry: [], recipes: [], menu: [], chores: [] };
 
 export function useHome(hid) {
   const [data, setData] = useState(EMPTY);
@@ -15,15 +16,49 @@ export function useHome(hid) {
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  // Klusjes apart: ontbreekt die tabel nog (schema.sql niet opnieuw uitgevoerd), dan werkt de rest gewoon.
+  const [choresError, setChoresError] = useState('');
+  const [agenda, setAgenda] = useState(null); // { ready, linked, calendar, owner } van de klusjes-agenda
+  const [agendaError, setAgendaError] = useState('');
+  const loadChores = useCallback(async () => {
+    try {
+      const chores = await store.listChores(hid);
+      setData((d) => ({ ...d, chores }));
+      setChoresError('');
+    } catch (e) {
+      setChoresError(e.message);
+    }
+  }, [hid]);
+  useEffect(() => { loadChores(); }, [loadChores]);
+  useEffect(() => store.subscribe(hid, loadChores, ['chores']), [hid, loadChores]);
+
+  // De agenda bijwerken gebeurt op de achtergrond: lukt het niet, dan blijft het klusje gewoon bewaard
+  // en proberen we het later opnieuw (het staat dan nog op "gcal_dirty").
+  const syncAgenda = useCallback(async (ids) => {
+    try {
+      const r = await store.choresAgenda('sync', ids ? { ids } : {});
+      if (r) setAgenda((a) => ({ ...a, ready: r.ready, linked: r.linked, calendar: r.calendar, owner: r.owner, demo: r.demo }));
+      setAgendaError(r?.failed?.length ? `Dit kon niet in de agenda: ${r.failed.join(', ')}. Ik probeer het later opnieuw.` : '');
+      if (r?.synced) await loadChores();
+      return r;
+    } catch (e) {
+      if (e.code === 'niet-ingesteld') setAgenda((a) => ({ ...(a || {}), ready: false, linked: false, missing: e.message }));
+      else if (e.code === 'verlopen') { setAgenda((a) => ({ ...(a || {}), linked: false, expired: true })); setAgendaError(e.message); }
+      else setAgendaError(e.message);
+      return null;
+    }
+  }, [loadChores]);
+
   const load = useCallback(async () => {
     try {
       const [shopping, pantry, recipes, menu] = await Promise.all(TABLES.map((t) => store.listRows(t, hid)));
-      setData({
+      setData((d) => ({
+        ...d,
         shopping: shopping.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))),
         pantry: pantry.sort((a, b) => a.name.localeCompare(b.name, 'nl')),
         recipes: recipes.sort((a, b) => a.title.localeCompare(b.title, 'nl')),
         menu,
-      });
+      }));
       setError('');
     } catch (e) {
       setError(e.message);
@@ -49,6 +84,19 @@ export function useHome(hid) {
     }
   }, [load]);
 
+  // Zoals run(), maar voor de klusjes.
+  const runChores = useCallback(async (local, remote) => {
+    if (local) setData((d) => ({ ...d, chores: local(d.chores) }));
+    try {
+      const out = await remote();
+      await loadChores();
+      return out;
+    } catch (e) {
+      await loadChores();
+      throw e;
+    }
+  }, [loadChores]);
+
   const act = useMemo(() => {
     const addShopping = (items, source = null) => {
       const open = dataRef.current.shopping.filter((s) => !s.done);
@@ -63,9 +111,81 @@ export function useHome(hid) {
       return run((d) => ({ shopping: [...d.shopping, ...fresh.map((f, i) => ({ ...f, id: 'tmp' + i + Date.now(), created_at: new Date().toISOString() }))] }), () => store.addRows('shopping_items', fresh)).then(() => fresh.length);
     };
 
+    const chore = (id) => dataRef.current.chores.find((c) => c.id === id);
+    const updateChore = async (id, patch) => {
+      const before = chore(id);
+      const p = { ...patch };
+      if ('planned_date' in p && !p.planned_date) { p.planned_date = null; p.planned_time = null; }
+      if ('done' in p) p.done_at = p.done ? new Date().toISOString() : null;
+      const agendaToo = needsAgenda(before, p);
+      if (agendaToo) p.gcal_dirty = true;
+      const { photo, ...shown } = p;
+      await runChores((list) => list.map((c) => (c.id === id ? { ...c, ...shown } : c)), () => store.updateRow('chores', id, p));
+      if (agendaToo) syncAgenda([id]);
+    };
+
     return {
       reload: load,
       addShopping,
+
+      // ── Klusjes ──
+      syncAgenda,
+      async agendaStatus() {
+        try {
+          const r = await store.choresAgenda('status');
+          setAgenda(r);
+          return r;
+        } catch (e) {
+          const r = { ready: false, linked: false, missing: e.code === 'niet-ingesteld' ? e.message : '' };
+          setAgenda(r);
+          if (e.code !== 'niet-ingesteld') setAgendaError(e.message);
+          return r;
+        }
+      },
+      setAgenda,
+
+      async addChore({ title, note = null, thumb = null, photo = null, planned_date = null, planned_time = null }) {
+        const t = String(title || '').trim().slice(0, 120);
+        if (!t) return null;
+        const row = {
+          household_id: hid,
+          title: t.charAt(0).toUpperCase() + t.slice(1),
+          note: note ? String(note).trim().slice(0, 1000) || null : null,
+          thumb, photo,
+          planned_date: planned_date || null,
+          planned_time: planned_date && planned_time ? planned_time : null,
+          done: false,
+          gcal_dirty: Boolean(planned_date),
+        };
+        const tmp = { ...row, photo: undefined, id: 'tmp' + Date.now(), created_at: new Date().toISOString() };
+        const [made] = await runChores((list) => [...list, tmp], () => store.addRows('chores', [row]));
+        if (made && row.planned_date) syncAgenda([made.id]);
+        return made;
+      },
+
+      updateChore,
+      toggleChore: (c) => updateChore(c.id, { done: !c.done }),
+
+      // Weg uit de lijst. Stond het in de agenda (en is het nog niet gedaan), dan ook weg uit de agenda.
+      async deleteChore(id, { keepEvent = false } = {}) {
+        const c = chore(id);
+        await runChores((list) => list.filter((x) => x.id !== id), async () => {
+          if (c?.gcal_event_id && store.mode !== 'demo') {
+            try { await store.choresAgenda('remove', { id, keepEvent }); return; } catch (e) {
+              if (e.code !== 'niet-ingesteld' && e.code !== 'niet-gekoppeld' && e.code !== 'verlopen') throw e;
+            }
+          }
+          await store.deleteRows('chores', [id]);
+        });
+      },
+
+      // Wat gedaan is, mag weg. In de agenda blijft het staan (met een vinkje), als herinnering.
+      clearDoneChores() {
+        const ids = dataRef.current.chores.filter((c) => c.done).map((c) => c.id);
+        return runChores((list) => list.filter((c) => !c.done), () => store.deleteRows('chores', ids));
+      },
+
+      chorePhoto: (id) => store.chorePhoto(id),
 
       async toggleShopping(item) {
         const done = !item.done;
@@ -183,7 +303,7 @@ export function useHome(hid) {
         );
       },
     };
-  }, [hid, load, run]);
+  }, [hid, load, run, runChores, syncAgenda]);
 
-  return { ...data, ready, error, act };
+  return { ...data, ready, error, choresError, agenda, agendaError, setAgendaError, act };
 }

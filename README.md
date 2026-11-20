@@ -41,9 +41,10 @@ Open het adres in **Chrome** op Android, tik op de drie puntjes › **App instal
 - **Recepten**: neem een foto van een recept. De telefoon leest de tekst zelf (gratis, zonder account). Bij elk recept zie je wat je in huis hebt en wat je moet kopen.
 - **Weekmenu**: kies per dag een recept of typ een maaltijd. Eén knop zet alles wat ontbreekt voor de week op de lijst.
 - **Agenda**: werkt met je Google Agenda.
+- **Klusjes** (onder Lijst): zie je iets dat moet gebeuren, typ het of neem er een foto van. Later geef je het een datum; dan komt het vanzelf in jullie Google Agenda, en verschuift het daar mee als je de datum wijzigt. Datum weg of klusje verwijderd? Dan verdwijnt het ook uit de agenda. Afgevinkt? Dan krijgt het in de agenda een ✓.
 - **Privé of zaak?**: vuistregels voor aankopen via de vennootschap (onder Meer). Indicatief, geen fiscaal advies.
 
-Met de microfoon kan je zeggen: "melk en eieren op de lijst", "de koffie is op", "vrijdag eten we lasagne" of "zaterdag om 10 uur zwemles".
+Met de microfoon kan je zeggen: "melk en eieren op de lijst", "de koffie is op", "vrijdag eten we lasagne", "zaterdag om 10 uur zwemles" of "klusje: lamp vervangen in de gang" (met "zaterdag" erbij is het meteen ingepland).
 
 ### Echte rekeningstand
 
@@ -107,6 +108,30 @@ Daarna is het telkens: **Meer › Bankafschrift importeren › Nieuwe verrichtin
 Ongeveer **elke 6 maanden** vraagt de bank om de toestemming te vernieuwen (een Europese regel). De app zegt het twee weken op voorhand; één tik op *Toestemming vernieuwen* en bevestigen in de Crelan-app volstaat.
 
 Alleen de eigenaar van het gezin kan de bank koppelen. Het `.pem`-bestand en de toestemming van de bank staan nooit in de app of in de code, alleen in Supabase.
+
+### Klusjes in Google Agenda (gratis)
+
+Zonder deze stappen werkt de klusjeslijst ook, alleen komen de klusjes dan niet in de agenda. Eenmalig instellen (± 15 minuten, op de computer):
+
+1. **Project maken.** Ga naar [console.cloud.google.com](https://console.cloud.google.com) en meld je aan met het Google-account van jullie agenda. Klik bovenaan op de projectkiezer › *New project*, naam `Huishoudboekje`, *Create*. Kies daarna dat project bovenaan.
+2. **Agenda aanzetten.** Typ in de zoekbalk bovenaan `Google Calendar API`, open het en klik op *Enable*.
+3. **Toestemmingsscherm.** Zoek `Google Auth Platform` (vroeger *OAuth consent screen*) en klik op *Get started*:
+   - App name: `Huishoudboekje`, User support email: je eigen adres › *Next*
+   - Audience: **External** › *Next*
+   - Contact information: je eigen adres › *Next*, vink de voorwaarden aan › *Create*
+4. **Publiceren.** Ga links naar *Audience* en klik op **Publish app** › *Confirm*. De status wordt *In production*. Doe je dit niet, dan vervalt de koppeling na 7 dagen.
+5. **Client maken.** Ga links naar *Clients* › *Create client*:
+   - Application type: **Web application**, naam `Huishoudboekje`
+   - Bij *Authorized redirect URIs* › *Add URI*: `https://bertmeirhaeghe-eng.github.io/Huishoudboekje/` (precies zo, met de schuine streep op het einde)
+   - *Create*. Je ziet nu de **Client ID** en het **Client secret**. Kopieer ze allebei meteen (of klik op *Download JSON*): het secret toont Google maar één keer.
+6. **De twee geheimen in Supabase zetten.** In Supabase: **Edge Functions › Secrets**:
+   - `GOOGLE_CLIENT_ID` met de Client ID
+   - `GOOGLE_CLIENT_SECRET` met het Client secret
+7. **Database bijwerken.** Plak `supabase/schema.sql` opnieuw volledig in Supabase › SQL Editor en klik op Run.
+8. **De functie plaatsen.** In Supabase: **Edge Functions › Deploy a new function › Via editor**, naam precies `klusjes-agenda`, plak de inhoud van `supabase/functions/klusjes-agenda/index.ts` en klik op Deploy.
+9. **Koppelen in de app.** Open de app › **Lijst** › **Klusjes** › **Google Agenda koppelen**. Google zegt *"Google heeft deze app niet geverifieerd"*: dat klopt, het is jullie eigen app. Klik op *Geavanceerd* › *Ga naar Huishoudboekje*, vink de vakjes voor Google Agenda aan en klik op *Doorgaan*. Kies daarna in welke agenda de klusjes komen (bv. jullie gedeelde gezinsagenda).
+
+Alleen de eigenaar van het gezin koppelt Google. Daarna kan iedereen van het gezin klusjes inplannen: ze komen in de gekozen agenda. Het Client secret en de toestemming van Google staan nooit in de app of in de code, alleen in Supabase.
 
 ## Voor ontwikkelaars
 

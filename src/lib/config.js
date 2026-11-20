@@ -14,3 +14,6 @@ export const PANTRY_FUNCTION = import.meta.env?.VITE_PANTRY_FUNCTION || 'swift-r
 
 // Naam (slug) van de Supabase-functie die verrichtingen bij de bank ophaalt (Enable Banking).
 export const BANK_FUNCTION = import.meta.env?.VITE_BANK_FUNCTION || 'bank-koppeling';
+
+// Naam (slug) van de Supabase-functie die klusjes in Google Agenda zet.
+export const CHORES_FUNCTION = import.meta.env?.VITE_CHORES_FUNCTION || 'klusjes-agenda';

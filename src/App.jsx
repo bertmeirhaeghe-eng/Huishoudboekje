@@ -54,20 +54,23 @@ export default function App() {
 }
 
 // Terug van de bank (Enable Banking stuurt ?code=…&state=… of ?error=… naar de app)?
-function readBankReturn() {
+// Of terug van Google (klusjes in de agenda): dan begint state met "g.".
+function readReturn() {
   try {
     const q = new URLSearchParams(location.search);
     if (!q.get('state') || !(q.get('code') || q.get('error'))) return null;
     const r = { code: q.get('code') || '', state: q.get('state'), error: q.get('error') || '', description: q.get('error_description') || '' };
     history.replaceState(null, '', location.pathname + location.hash);
-    return r;
+    return { ...r, from: r.state.startsWith('g.') ? 'google' : 'bank' };
   } catch { return null; }
 }
 
 function Boekje({ household, onHouseholdChange }) {
   const isOwner = household.role === 'eigenaar';
-  const [bankReturn] = useState(readBankReturn);
-  const [screen, setScreen] = useState(() => (bankReturn ? 'import' : startsOnBoard() ? 'bord' : 'overzicht'));
+  const [comeBack] = useState(readReturn);
+  const bankReturn = comeBack?.from === 'bank' ? comeBack : null;
+  const googleReturn = comeBack?.from === 'google' ? comeBack : null;
+  const [screen, setScreen] = useState(() => (bankReturn ? 'import' : googleReturn ? 'lijst' : startsOnBoard() ? 'bord' : 'overzicht'));
   const [book, setBook] = useState('gezin');
   const [month, setMonth] = useState(monthKey());
   const [period, setPeriod] = useState('maand'); // maand | jaar
@@ -79,7 +82,7 @@ function Boekje({ household, onHouseholdChange }) {
   const [party, setParty] = useState(null);
   const [draft, setDraft] = useState(null); // voorinvulling vanuit spraak
   const [beforeVoice, setBeforeVoice] = useState('overzicht');
-  const [listTab, setListTab] = useState('boodschappen');
+  const [listTab, setListTab] = useState(() => (googleReturn ? 'klusjes' : 'boodschappen'));
   const [kitchenTab, setKitchenTab] = useState('menu');
   const [openRecipe, setOpenRecipe] = useState(null);
   const [menuFocus, setMenuFocus] = useState(null);
@@ -152,6 +155,10 @@ function Boekje({ household, onHouseholdChange }) {
       await home.act.setMenu(cmd.date, cmd.meal, cmd.recipe_id, cmd.slot || 'avond');
       setKitchenTab('menu'); setOpenRecipe(null); setMenuFocus(cmd.date); go('keuken');
       toast(`${cmd.meal} staat op het menu`);
+    } else if (cmd.kind === 'klus') {
+      await home.act.addChore({ title: cmd.title, planned_date: cmd.date, planned_time: cmd.time });
+      setListTab('klusjes'); go('lijst');
+      toast(cmd.date ? 'Klusje ingepland' : 'Klusje genoteerd');
     } else if (cmd.kind === 'agenda') {
       const how = await saveEvent({ title: cmd.title, date: cmd.date, time: cmd.time, who: cmd.who });
       go('agenda');
@@ -209,7 +216,7 @@ function Boekje({ household, onHouseholdChange }) {
   } else if (screen === 'privezaak') {
     content = <TaxHelper onBack={() => go('meer')} onBook={(d) => { setDraft({ type: 'uit', date: todayISO(), ...d }); go('toevoegen'); }} />;
   } else if (screen === 'lijst') {
-    content = <Lists home={home} tab={listTab} setTab={setListTab} toast={toast} />;
+    content = <Lists home={home} tab={listTab} setTab={setListTab} toast={toast} googleReturn={googleReturn} />;
   } else if (screen === 'keuken') {
     content = <Kitchen home={home} tab={kitchenTab} setTab={setKitchenTab} toast={toast} openRecipe={openRecipe} setOpenRecipe={setOpenRecipe} focusDate={menuFocus} />;
   } else if (screen === 'agenda') {
