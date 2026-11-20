@@ -23,6 +23,7 @@ test('AI-antwoord: rare waarden worden veilig', () => {
   assert.equal(prive.pct, 0);
   assert.equal(prive.btw, false);
   assert.equal(fromAi({ verdict: 'twijfel', pct: 40, why: 'Hangt af.' }).pct, null);
+  assert.equal(fromAi({ verdict: 'Privé', why: 'Thuis.' }).verdict, 'prive');
 });
 
 test('vaste vuistregels blijven werken als terugval', () => {

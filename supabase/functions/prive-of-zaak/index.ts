@@ -78,34 +78,75 @@ const CLAUDE_SCHEMA = {
 };
 
 class AiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public uitleg = '') { super(message); }
+}
+
+// Het eerste JSON-object uit een antwoord halen (ook als het tussen ```json ... ``` staat).
+function parseJson(text: string) {
+  const a = text.indexOf('{');
+  const b = text.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new AiError(422, `Geen JSON in antwoord: ${text.slice(0, 200)}`, 'het antwoord was geen geldig formaat');
+  return JSON.parse(text.slice(a, b + 1));
+}
+
+// Foutmelding van Google leesbaar maken.
+async function googleError(res: Response) {
+  const raw = await res.text();
+  let msg = raw;
+  try { msg = JSON.parse(raw)?.error?.message || raw; } catch { /* geen JSON */ }
+  return String(msg).replace(/\s+/g, ' ').slice(0, 220);
 }
 
 // Gemini: eerst het model uit het geheim GEMINI_MODEL (als dat er is), anders de "laatste Flash".
-// Bestaat een model niet (meer), dan proberen we het volgende.
+// Bestaat een model niet (meer) of weigert het de vraag, dan proberen we het volgende.
+// Lukt het met het vaste antwoordschema niet, dan vragen we gewoon om JSON.
 async function askGemini(key: string, question: string) {
   const own = (Deno.env.get('GEMINI_MODEL') || '').trim();
-  const models = [own, 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash'].filter((m, i, a) => m && a.indexOf(m) === i);
+  const models = [own, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'].filter((m, i, a) => m && a.indexOf(m) === i);
   let last: AiError | null = null;
   for (const model of models) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: 'user', parts: [{ text: `Wat ik wil kopen: ${question}` }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2000, responseMimeType: 'application/json', responseSchema: GEMINI_SCHEMA },
-      }),
-    });
-    if (res.status === 404) { last = new AiError(404, `Model ${model} niet gevonden`); continue; }
-    if (!res.ok) throw new AiError(res.status, `Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const data = await res.json();
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    const text = parts.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought).map((p: { text: string }) => p.text).join('');
-    if (!text) throw new AiError(422, 'Gemini gaf geen antwoord.');
-    return { ...JSON.parse(text), bron: 'Gemini' };
+    for (const withSchema of [true, false]) {
+      const generationConfig: Record<string, unknown> = { temperature: 0.2, maxOutputTokens: 8192, responseMimeType: 'application/json' };
+      if (withSchema) generationConfig.responseSchema = GEMINI_SCHEMA;
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: 'user', parts: [{ text: `Wat ik wil kopen: ${question}\nAntwoord enkel met een JSON-object met de velden verdict, pct, btw, cat, title, why en tips.` }] }],
+          generationConfig,
+        }),
+      });
+      if (!res.ok) {
+        const msg = await googleError(res);
+        console.error(`prive-of-zaak: ${model}${withSchema ? '' : ' (zonder schema)'} gaf ${res.status}: ${msg}`);
+        // Sleutel fout, quotum op of land niet toegelaten: geen zin om verder te proberen.
+        if (res.status === 401 || res.status === 403 || res.status === 429 || /api key|location|region|country|billing|quota/i.test(msg)) {
+          throw new AiError(res.status, `Gemini ${res.status}: ${msg}`, msg);
+        }
+        last = new AiError(res.status, `Gemini ${model} ${res.status}: ${msg}`, msg);
+        if (res.status === 400 && withSchema) continue; // nog eens zonder schema
+        break; // volgend model
+      }
+      const data = await res.json();
+      const cand = data?.candidates?.[0];
+      const parts = cand?.content?.parts || [];
+      const text = parts.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought).map((p: { text: string }) => p.text).join('');
+      if (!text) {
+        const why = data?.promptFeedback?.blockReason || cand?.finishReason || 'leeg';
+        console.error(`prive-of-zaak: ${model} gaf geen tekst (${why})`);
+        last = new AiError(422, `Gemini ${model}: geen tekst (${why})`, `Gemini gaf geen tekst (${why})`);
+        break;
+      }
+      try {
+        return { ...parseJson(text), bron: 'Gemini' };
+      } catch (e) {
+        console.error(`prive-of-zaak: ${model} antwoord niet leesbaar: ${text.slice(0, 300)}`);
+        last = e instanceof AiError ? e : new AiError(422, String(e), 'het antwoord was geen geldig formaat');
+      }
+    }
   }
-  throw last || new AiError(404, 'Geen Gemini-model gevonden.');
+  throw last || new AiError(404, 'Geen Gemini-model gevonden.', 'geen Gemini-model gevonden');
 }
 
 async function askClaude(key: string, question: string) {
@@ -124,7 +165,7 @@ async function askClaude(key: string, question: string) {
   const data = await res.json();
   const text = (data?.content || []).find((b: { type: string }) => b.type === 'text')?.text;
   if (!text) throw new AiError(422, 'Claude gaf geen antwoord.');
-  return { ...JSON.parse(text), bron: 'Claude' };
+  return { ...parseJson(text), bron: 'Claude' };
 }
 
 Deno.serve(async (req) => {
@@ -155,11 +196,16 @@ Deno.serve(async (req) => {
     // De echte fout komt in de Logs van de functie in Supabase.
     console.error('prive-of-zaak:', e instanceof Error ? e.message : e);
     const status = e instanceof AiError ? e.status : 500;
-    if (status === 400 && /API key|API_KEY/i.test(String((e as Error).message))) {
+    const msg = String((e as Error)?.message || '');
+    const uitleg = e instanceof AiError ? e.uitleg : '';
+    if (/API key|API_KEY/i.test(msg)) {
       return json({ error: 'niet-ingesteld', reden: 'Google weigert de sleutel. Kijk of GEMINI_API_KEY klopt.' }, 503);
+    }
+    if (/location|region|country/i.test(msg)) {
+      return json({ error: 'niet-ingesteld', reden: 'Google laat de gratis versie hier niet toe. Zet facturatie aan in Google AI Studio.' }, 503);
     }
     if (status === 401 || status === 403) return json({ error: 'niet-ingesteld', reden: 'De AI weigert de sleutel. Kijk of die klopt in Supabase.' }, 503);
     if (status === 429) return json({ error: 'druk', reden: 'Even te veel vragen na elkaar (gratis limiet). Probeer het zo opnieuw.' }, 429);
-    return json({ error: 'fout', reden: 'De AI gaf geen bruikbaar antwoord.' }, 502);
+    return json({ error: 'fout', reden: uitleg ? `De AI gaf geen bruikbaar antwoord: ${uitleg}` : 'De AI gaf geen bruikbaar antwoord.' }, 502);
   }
 });

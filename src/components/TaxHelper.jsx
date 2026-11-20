@@ -31,7 +31,7 @@ export default function TaxHelper({ onBack, onBook }) {
     store.adviseAI(x)
       .then((raw) => {
         const t = fromAi(raw);
-        const r = t ? { status: 'ok', topic: t } : { status: 'mis', reden: 'De AI gaf geen bruikbaar antwoord.' };
+        const r = t ? { status: 'ok', topic: t } : { status: 'mis', reden: 'Het antwoord van de AI was onvolledig.' };
         cache.current.set(key, r);
         return r;
       })
