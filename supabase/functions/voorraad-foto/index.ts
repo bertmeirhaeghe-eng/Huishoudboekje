@@ -187,9 +187,10 @@ Deno.serve(async (req) => {
   const claude = Deno.env.get('ANTHROPIC_API_KEY');
   if (!gemini && !claude) return json({ error: 'niet-ingesteld', reden: 'De sleutel GEMINI_API_KEY staat nog niet in Supabase.' }, 503);
 
-  let body: { image?: string; mediaType?: string; known?: string[] };
+  let body: { image?: string; data?: string; mediaType?: string; known?: string[] };
   try { body = await req.json(); } catch { return json({ error: 'Geen foto ontvangen.' }, 400); }
-  const image = String(body.image || '');
+  // De foto als base64 (zonder "data:image/jpeg;base64," ervoor). Oudere app-versies stuurden ze als "data".
+  const image = String(body.image || body.data || '').replace(/^data:[^,]*,/, '');
   if (!image || image.length > 7_000_000) return json({ error: 'Geen of te grote foto.' }, 400);
   const mediaType = ['image/jpeg', 'image/png', 'image/webp'].includes(String(body.mediaType)) ? String(body.mediaType) : 'image/jpeg';
   const known = (Array.isArray(body.known) ? body.known : []).map((s) => String(s).slice(0, 80)).slice(0, 300);
