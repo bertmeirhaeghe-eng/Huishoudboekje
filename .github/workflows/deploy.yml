@@ -28,6 +28,9 @@ jobs:
       # https://bertmeirhaeghe-eng.github.io/Huishoudboekje/
       - name: Naar gh-pages
         run: |
+          # De stukjes van de vorige versies laten staan: wie de app nog open had, kan dan nog verder.
+          git clone -q --depth 1 -b gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" vorige || true
+          if [ -d vorige/assets ]; then cp -rn vorige/assets/. dist/assets/ || true; fi
           cd dist
           touch .nojekyll
           git init -q -b gh-pages
