@@ -1,6 +1,6 @@
 // Gedeelde gegevens via Supabase. De beveiliging zit in de database-regels (supabase/schema.sql).
 import { createClient } from '@supabase/supabase-js';
-import { ADVICE_FUNCTION, BANK_FUNCTION, CHORES_FUNCTION, PANTRY_FUNCTION } from './config.js';
+import { ADVICE_FUNCTION, AI_FUNCTION, BANK_FUNCTION, CHORES_FUNCTION, PANTRY_FUNCTION } from './config.js';
 
 export function createSupabaseStore(url, anonKey) {
   const sb = createClient(url, anonKey, {
@@ -161,7 +161,7 @@ export function createSupabaseStore(url, anonKey) {
       let msg = '';
       let reden = '';
       try { const b = await res.json(); msg = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
-      if (!res || res.status === 404 || res.status === 503 || msg === 'niet-ingesteld' || error.name === 'FunctionsFetchError' || error.name === 'FunctionsRelayError') {
+      if (!res || res.status === 404 || res.status === 503 || msg === 'niet-ingesteld' || msg === 'druk' || error.name === 'FunctionsFetchError' || error.name === 'FunctionsRelayError') {
         if (!reden) {
           if (res?.status === 404) reden = 'De functie voorraad-foto is niet gevonden in Supabase.';
           else if (error.name !== 'FunctionsHttpError') reden = 'De functie voorraad-foto is niet bereikbaar.';
@@ -187,6 +187,26 @@ export function createSupabaseStore(url, anonKey) {
       }
       const e = new Error(reden || 'De AI gaf geen antwoord.');
       e.code = code || 'fout';
+      e.reden = reden;
+      throw e;
+    },
+
+    // AI-hulp (Supabase-functie "ai-hulp", standaard Gemini). action: categorie | inzichten.
+    // Lukt het niet, dan krijg je een fout met .code ('niet-ingesteld', 'druk', 'fout') en .reden.
+    async ai(action, body = {}) {
+      const { data, error } = await sb.functions.invoke(AI_FUNCTION, { body: { action, ...body } });
+      if (!error) return data;
+      const res = error.context;
+      let code = '';
+      let reden = '';
+      try { const b = await res.json(); code = b.error || ''; reden = b.reden || ''; } catch { /* geen JSON */ }
+      if (!code || !['niet-ingesteld', 'druk', 'fout'].includes(code)) {
+        if (res?.status === 404) { code = 'niet-ingesteld'; reden = 'De functie ai-hulp is nog niet geplaatst in Supabase.'; }
+        else if (error.name !== 'FunctionsHttpError') { code = 'niet-ingesteld'; reden = reden || 'De functie ai-hulp is niet bereikbaar.'; }
+        else code = 'fout';
+      }
+      const e = new Error(reden || 'De AI gaf geen antwoord.');
+      e.code = code;
       e.reden = reden;
       throw e;
     },
