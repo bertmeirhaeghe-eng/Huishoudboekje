@@ -52,6 +52,10 @@ Op het overzicht staat onder het saldo de knop **Echte rekeningstand ingeven**. 
 
 Zolang `supabase/schema.sql` niet opnieuw is uitgevoerd, bewaart de app die stand alleen op het toestel.
 
+### Vaste betalingen die nog komen
+
+Gaat er elke maand een vaste betaling van de rekening (bv. de afbetaling van het woningkrediet op het einde van de maand), dan toont het overzicht die al vóór de bank ze boekt: in de groene kaart staat **Komt nog** met wat er op het einde van de maand overblijft, en bij de uitgaven staat een stippellijn-blok **Komt nog deze maand**. De app herkent zo'n betaling vanzelf: dezelfde omschrijving, ongeveer om de maand, met (bijna) hetzelfde bedrag. Voor een krediet, lening, huur, verzekering of domiciliëring volstaat één keer. Zodra de bank de betaling boekt, verdwijnt ze uit "Komt nog" en telt ze maar één keer. Tik op een verwachte betaling en kies **Niet meer verwachten** als iets niet meer terugkomt.
+
 ### Na deze update: database bijwerken
 
 Plak `supabase/schema.sql` opnieuw volledig in Supabase > SQL Editor en klik op Run. Bestaande gegevens blijven staan.

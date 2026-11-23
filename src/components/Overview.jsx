@@ -9,6 +9,7 @@ import { analyze, changeLabel } from '../lib/insights.js';
 import { categoriesFor, category } from '../lib/categories.js';
 import { dayLabel, longToday, monthKey, monthLabel, money, parseAmount, todayISO } from '../lib/format.js';
 import { budgetMonth, budgetRows, groupByDate, perMonth, summarize, totalsByCategory } from '../lib/stats.js';
+import { expectedPayments, getHidden, saveHidden } from '../lib/recurring.js';
 
 export default function Overview({ household, isOwner, book, setBook, month, setMonth, period = 'maand', setPeriod, entries, chartEntries, months, earlyDays = 0, budgets, account = null, onSaveBalance, onDelete, onChangeCategory, onOpenChart, onOpenBudgets, onOpenInsights, today = {}, onOpenList, onOpenMenu, onOpenTax }) {
   const [open, setOpen] = useState(null);
@@ -44,6 +45,13 @@ export default function Overview({ household, isOwner, book, setBook, month, set
     : jaar ? (zaak ? `Resultaat vennootschap ${year}` : `Saldo heel ${year}`)
     : zaak ? 'Resultaat vennootschap'
     : thisMonth ? 'Nog te besteden' : `Saldo ${monthLabel(month).split(' ')[0]}`;
+  // Vaste betalingen (zoals het woningkrediet) die deze maand nog van de rekening moeten.
+  const [hidden, setHidden] = useState(() => getHidden(household.id, book));
+  useEffect(() => setHidden(getHidden(household.id, book)), [household.id, book]);
+  const [openDue, setOpenDue] = useState(null);
+  const due = useMemo(() => (thisMonth ? expectedPayments(chartEntries, month, { hidden }) : { pending: [], paid: [], total: 0 }), [thisMonth, chartEntries, month, hidden]);
+  const dueList = due.pending.filter((p) => !filterOn || p.category === catFilter);
+  const afterDue = heroValue - due.total;
   const spentRatio = sum.income > 0 ? Math.min(1, sum.expense / sum.income) : sum.expense > 0 ? 1 : 0;
 
   return (
@@ -100,6 +108,12 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               <span>In: <b>{money(sum.income)}</b></span>
               <span>Uit: <b>{money(sum.expense)}</b></span>
             </div>
+            {due.total > 0 && (
+              <div className="hero-due" aria-label="Komt nog deze maand">
+                <span>Komt nog: <b>−&nbsp;{money(due.total)}</b></span>
+                <span>{real ? 'Einde maand' : 'Na vaste kosten'}: <b>{afterDue < 0 ? '−\u00a0' : ''}{money(Math.abs(afterDue))}</b></span>
+              </div>
+            )}
             {thisMonth && onSaveBalance && (
               <button className="hero-link" onClick={() => setBalanceOpen(true)}>
                 <Icon name="wallet" size={16} /> {real ? 'Rekeningstand aanpassen' : 'Echte rekeningstand ingeven'}
@@ -187,6 +201,23 @@ export default function Overview({ household, isOwner, book, setBook, month, set
               <button onClick={() => setCatFilter(null)} aria-label="Filter wissen"><Icon name="close" size={16} /></button>
             </span>
           )}
+          {kind === 'uit' && dueList.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <span className="tiny bold muted" style={{ paddingLeft: 4 }}>Komt nog deze maand</span>
+              <div className="card list due-list">
+                {dueList.map((p) => (
+                  <button key={p.key} className="entry due" onClick={() => setOpenDue(p)}>
+                    <CatIcon id={p.category} />
+                    <span className="grow">
+                      <span style={{ display: 'block', fontWeight: 600 }}>{p.note}</span>
+                      <span className="tiny muted">Verwacht rond {dayLabel(p.date).toLowerCase()} · elke maand</span>
+                    </span>
+                    <span className="amt muted">−&nbsp;{money(p.amount_cents)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {groups.length === 0 && entries.length > 0 && (
             <div className="card small muted">{kind === 'in' ? 'Nog geen inkomsten deze maand.' : 'Nog geen uitgaven deze maand.'}</div>
           )}
@@ -230,6 +261,14 @@ export default function Overview({ household, isOwner, book, setBook, month, set
           zaak={zaak}
           onClose={() => setBalanceOpen(false)}
           onSave={async (asOf, cents) => { await onSaveBalance(asOf, cents); setBalanceOpen(false); }}
+        />
+      )}
+
+      {openDue && (
+        <DueSheet
+          item={openDue}
+          onClose={() => setOpenDue(null)}
+          onHide={() => { const next = [...hidden, openDue.key]; saveHidden(household.id, book, next); setHidden(next); setOpenDue(null); }}
         />
       )}
 
@@ -399,6 +438,32 @@ function BalanceSheet({ account, zaak, onClose, onSave }) {
         {error && <div className="error">{error}</div>}
         <button className={'btn' + (zaak ? ' blue' : '')} disabled={busy} onClick={save}><Icon name="check" /> {busy ? 'Bewaren…' : 'Bewaren'}</button>
         <span className="tiny muted">Tip: importeer je een bankbestand van Crelan, dan zet de app de stand vanzelf juist.</span>
+      </div>
+    </div>
+  );
+}
+
+// Uitleg bij een vaste betaling die nog moet komen, met de keuze om ze niet meer te verwachten.
+function DueSheet({ item, onClose, onHide }) {
+  const c = category(item.category);
+  const seen = item.seen.map((m) => monthLabel(m).split(' ')[0]).join(', ');
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Komt nog" onClick={(e) => e.stopPropagation()}>
+        <div className="spread">
+          <div className="row">
+            <CatIcon id={item.category} selected />
+            <div>
+              <div className="bold">{item.note}</div>
+              <div className="tiny muted">{c.name} · komt nog</div>
+            </div>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Sluiten" style={{ background: 'var(--bg)' }}><Icon name="close" /></button>
+        </div>
+        <div className="amount-display" style={{ fontSize: 36, opacity: 0.7 }}>−&nbsp;{money(item.amount_cents)}</div>
+        <div className="small muted" style={{ textAlign: 'center' }}>Verwacht rond {dayLabel(item.date).toLowerCase()}</div>
+        <span className="small">Dit ging elke maand van de rekening (gezien in {seen}). De app rekent het al mee, zodat je ziet wat er op het einde van de maand overblijft. Zodra de bank het boekt, verdwijnt het hier vanzelf en telt het maar één keer.</span>
+        <button className="btn ghost" onClick={onHide}><Icon name="close" /> Niet meer verwachten</button>
       </div>
     </div>
   );
