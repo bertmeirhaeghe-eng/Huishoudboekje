@@ -569,3 +569,9 @@ details summary { cursor: pointer; }
 .ai-tag { font-size: 13px; line-height: 1; flex: 0 0 auto; }
 .ai-card { border: 1.5px dashed var(--line, #d9dee5); }
 .ai-card .ai-head { display: flex; gap: 10px; align-items: center; }
+
+/* Vaste betalingen die nog moeten komen */
+.hero-due { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.16); border: 1px dashed rgba(255, 255, 255, 0.55); }
+.due-list { border: 1.5px dashed var(--line, #d9dee3); background: transparent; box-shadow: none; }
+.entry.due .cat-ico { opacity: 0.75; }
+.amt.muted { font-weight: 600; }
