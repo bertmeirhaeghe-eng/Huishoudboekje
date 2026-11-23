@@ -51,7 +51,8 @@ export default function Overview({ household, isOwner, book, setBook, month, set
   const [openDue, setOpenDue] = useState(null);
   const due = useMemo(() => (thisMonth ? expectedPayments(chartEntries, month, { hidden }) : { pending: [], paid: [], total: 0 }), [thisMonth, chartEntries, month, hidden]);
   const dueList = due.pending.filter((p) => !filterOn || p.category === catFilter);
-  const afterDue = heroValue - due.total;
+  // Saldo van deze maand (in min uit) min wat er nog moet komen.
+  const afterDue = sum.balance - due.total;
   const spentRatio = sum.income > 0 ? Math.min(1, sum.expense / sum.income) : sum.expense > 0 ? 1 : 0;
 
   return (
@@ -111,7 +112,7 @@ export default function Overview({ household, isOwner, book, setBook, month, set
             {due.total > 0 && (
               <div className="hero-due" aria-label="Komt nog deze maand">
                 <span>Komt nog: <b>−&nbsp;{money(due.total)}</b></span>
-                <span>{real ? 'Einde maand' : 'Na vaste kosten'}: <b>{afterDue < 0 ? '−\u00a0' : ''}{money(Math.abs(afterDue))}</b></span>
+                <span>Saldo einde maand: <b>{afterDue < 0 ? '−\u00a0' : '+\u00a0'}{money(Math.abs(afterDue))}</b></span>
               </div>
             )}
             {thisMonth && onSaveBalance && (
